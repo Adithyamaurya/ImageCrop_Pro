@@ -78,6 +78,20 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     setSelectedCropId(newCrop.id);
   };
 
+  const addCropArray = (newCrops: Omit<CropArea, 'id'>[]) => {
+    const cropsWithIds: CropArea[] = newCrops.map((crop, index) => ({
+      ...crop,
+      id: `crop-${Date.now()}-${index}`
+    }));
+    
+    setCropAreas(prev => [...prev, ...cropsWithIds]);
+    
+    // Select the first crop from the new array
+    if (cropsWithIds.length > 0) {
+      setSelectedCropId(cropsWithIds[0].id);
+    }
+  };
+
   const copyCropStyle = (sourceCropId: string) => {
     const sourceCrop = cropAreas.find(crop => crop.id === sourceCropId);
     if (!sourceCrop) return;
@@ -152,6 +166,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onDeleteCrop={deleteCropArea}
             onSelectCrop={setSelectedCropId}
             onCopyCropStyle={copyCropStyle}
+            onAddCropArray={addCropArray}
           />
         </div>
 

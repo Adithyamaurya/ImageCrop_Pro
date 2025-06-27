@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw, Grid } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface CropControlsProps {
@@ -10,6 +10,7 @@ interface CropControlsProps {
   onDeleteCrop: (id: string) => void;
   onSelectCrop: (id: string | null) => void;
   onCopyCropStyle: (cropId: string) => void;
+  onAddCropArray: (crops: Omit<CropArea, 'id'>[]) => void;
 }
 
 const ASPECT_RATIOS = [
@@ -28,7 +29,8 @@ export const CropControls: React.FC<CropControlsProps> = ({
   onUpdateCrop,
   onDeleteCrop,
   onSelectCrop,
-  onCopyCropStyle
+  onCopyCropStyle,
+  onAddCropArray
 }) => {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
@@ -91,16 +93,69 @@ export const CropControls: React.FC<CropControlsProps> = ({
     onUpdateCrop(selectedCrop.id, { rotation });
   };
 
+  const generateCropArray = () => {
+    if (cropAreas.length === 0) return;
+
+    // Find the bounding box of existing crops to determine array dimensions
+    const minX = Math.min(...cropAreas.map(crop => crop.x));
+    const maxX = Math.max(...cropAreas.map(crop => crop.x + crop.width));
+    const minY = Math.min(...cropAreas.map(crop => crop.y));
+    const maxY = Math.max(...cropAreas.map(crop => crop.y + crop.height));
+    
+    const arrayWidth = maxX - minX;
+    const arrayHeight = maxY - minY;
+    
+    // Calculate offset to position new array adjacent to the original
+    const offsetX = arrayWidth + 50; // 50px gap between arrays
+    
+    // Create new crops based on existing ones but offset to the right
+    const newCrops: Omit<CropArea, 'id'>[] = cropAreas.map((crop, index) => ({
+      x: crop.x + offsetX,
+      y: crop.y,
+      width: crop.width,
+      height: crop.height,
+      aspectRatio: crop.aspectRatio,
+      rotation: crop.rotation || 0,
+      name: `${crop.name} Copy`
+    }));
+
+    onAddCropArray(newCrops);
+  };
+
+  const canGenerateArray = cropAreas.length > 0;
+
   return (
     <div className="p-4 space-y-6 flex-1 overflow-y-auto">
-      {/* Add Crop Button */}
-      <button
-        onClick={onAddCrop}
-        className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 transition-colors"
-      >
-        <Plus className="h-5 w-5" />
-        <span>Add Crop Area</span>
-      </button>
+      {/* Add Crop Buttons */}
+      <div className="space-y-3">
+        <button
+          onClick={onAddCrop}
+          className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+          <span>Add Crop Area</span>
+        </button>
+
+        <button
+          onClick={generateCropArray}
+          disabled={!canGenerateArray}
+          className={`w-full flex items-center justify-center space-x-2 rounded-lg py-3 px-4 transition-colors ${
+            canGenerateArray
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+          }`}
+          title={canGenerateArray ? 'Duplicate crop array layout' : 'Create crops first to duplicate array'}
+        >
+          <Grid className="h-5 w-5" />
+          <span>Duplicate Array</span>
+        </button>
+
+        {canGenerateArray && (
+          <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
+            <strong>Duplicate Array:</strong> Creates a new set of crops with the same layout positioned adjacent to the original array.
+          </div>
+        )}
+      </div>
 
       {/* Crop Areas List */}
       <div className="bg-gray-800 rounded-lg p-4">
