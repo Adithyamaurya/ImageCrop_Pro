@@ -33,7 +33,7 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizing, setResizing] = useState<{ cropId: string; handle: string } | null>(null);
-  const [rotating, setRotating] = useState<string | null>(null);
+  const [rotating, setRotating] = useState<{ cropId: string; startAngle: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
@@ -168,7 +168,7 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
         
         // Draw rotation handle (circle)
         ctx.setLineDash([]);
-        ctx.fillStyle = '#F59E0B';
+        ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
         ctx.strokeStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.arc(rotationHandle.x, rotationHandle.y, handleSize/2 + 2, 0, 2 * Math.PI);
@@ -237,7 +237,7 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
         ctx.fillText(`${Math.round(width)} × ${Math.round(height)}`, x + 10, y + 18);
       }
     }
-  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd]);
+  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd, rotating]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -357,6 +357,12 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
     return distance <= handleSize ? 'rotate' : null;
   };
 
+  const calculateAngleFromCenter = (centerX: number, centerY: number, mouseX: number, mouseY: number) => {
+    const angle = Math.atan2(mouseY - centerY, mouseX - centerX);
+    const degrees = (angle * 180) / Math.PI + 90; // Add 90 to make 0 degrees point up
+    return ((degrees % 360) + 360) % 360; // Normalize to 0-360 range
+  };
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
@@ -365,7 +371,10 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
     if (selectedCrop) {
       const rotationHandle = getRotationHandle(pos.x, pos.y, selectedCrop);
       if (rotationHandle) {
-        setRotating(selectedCrop.id);
+        const centerX = selectedCrop.x + selectedCrop.width / 2;
+        const centerY = selectedCrop.y + selectedCrop.height / 2;
+        const startAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
+        setRotating({ cropId: selectedCrop.id, startAngle });
         return;
       }
       
@@ -412,26 +421,38 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
     const pos = getMousePos(e);
     
     if (rotating) {
-      const crop = cropAreas.find(c => c.id === rotating);
+      const crop = cropAreas.find(c => c.id === rotating.cropId);
       if (!crop) return;
 
       const centerX = crop.x + crop.width / 2;
       const centerY = crop.y + crop.height / 2;
       
-      // Calculate angle from center to mouse position
-      const angle = Math.atan2(pos.y - centerY, pos.x - centerX);
-      const degrees = (angle * 180) / Math.PI + 90; // Add 90 to make 0 degrees point up
+      // Calculate current angle from center to mouse position
+      const currentAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
+      
+      // Calculate the difference from the starting angle
+      let angleDiff = currentAngle - rotating.startAngle;
+      
+      // Handle angle wrapping
+      if (angleDiff > 180) angleDiff -= 360;
+      if (angleDiff < -180) angleDiff += 360;
+      
+      // Apply the angle difference to the crop's current rotation
+      const currentRotation = crop.rotation || 0;
+      let newRotation = currentRotation + angleDiff;
       
       // Snap to 15-degree increments when holding Shift
-      let finalAngle = degrees;
       if (e.shiftKey) {
-        finalAngle = Math.round(degrees / 15) * 15;
+        newRotation = Math.round(newRotation / 15) * 15;
       }
       
       // Normalize angle to 0-360 range
-      finalAngle = ((finalAngle % 360) + 360) % 360;
+      newRotation = ((newRotation % 360) + 360) % 360;
       
-      onCropUpdate(crop.id, { rotation: finalAngle });
+      onCropUpdate(crop.id, { rotation: newRotation });
+      
+      // Update the start angle for the next movement
+      setRotating({ ...rotating, startAngle: currentAngle });
     } else if (resizing) {
       const crop = cropAreas.find(c => c.id === resizing.cropId);
       if (!crop) return;
@@ -534,7 +555,7 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
       const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
       if (selectedCrop) {
         if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
-          canvas.style.cursor = 'grab';
+          canvas.style.cursor = rotating ? 'grabbing' : 'grab';
         } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
           canvas.style.cursor = 'nw-resize';
         } else if (getCropAt(pos.x, pos.y)) {
@@ -638,10 +659,11 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
         <div className="space-y-1">
           <div>🖱️ <strong>Drag on image:</strong> Create crop</div>
           <div>✋ <strong>Drag crop:</strong> Move crop</div>
-          <div>🔄 <strong>Orange handle:</strong> Rotate crop</div>
+          <div>🔄 <strong>Orange handle:</strong> Drag to rotate</div>
           <div>📐 <strong>Blue handles:</strong> Resize crop</div>
           <div>🔄 <strong>Scroll:</strong> Zoom in/out</div>
           <div>✋ <strong>Drag empty:</strong> Pan image</div>
+          <div>⇧ <strong>Shift + rotate:</strong> Snap to 15°</div>
         </div>
       </div>
     </div>

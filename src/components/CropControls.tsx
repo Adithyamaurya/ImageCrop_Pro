@@ -79,6 +79,18 @@ export const CropControls: React.FC<CropControlsProps> = ({
     }
   };
 
+  const handleRotationChange = (value: string) => {
+    if (!selectedCrop) return;
+    
+    let rotation = parseFloat(value);
+    if (isNaN(rotation)) rotation = 0;
+    
+    // Normalize to 0-360 range
+    rotation = ((rotation % 360) + 360) % 360;
+    
+    onUpdateCrop(selectedCrop.id, { rotation });
+  };
+
   return (
     <div className="p-4 space-y-6 flex-1 overflow-y-auto">
       {/* Add Crop Button */}
@@ -237,26 +249,66 @@ export const CropControls: React.FC<CropControlsProps> = ({
             {/* Rotation Control */}
             <div>
               <label className="block text-xs text-gray-400 mb-2">Rotation</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="360"
-                  step="1"
-                  value={selectedCrop.rotation || 0}
-                  onChange={(e) => onUpdateCrop(selectedCrop.id, { rotation: parseFloat(e.target.value) })}
-                  className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-                <span className="text-xs text-gray-300 w-12 text-right">
-                  {Math.round(selectedCrop.rotation || 0)}°
-                </span>
-                <button
-                  onClick={resetRotation}
-                  className="text-orange-400 hover:text-orange-300 p-1 rounded transition-colors"
-                  title="Reset rotation"
-                >
-                  <RotateCw className="h-4 w-4" />
-                </button>
+              <div className="space-y-2">
+                {/* Slider */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={selectedCrop.rotation || 0}
+                    onChange={(e) => onUpdateCrop(selectedCrop.id, { rotation: parseFloat(e.target.value) })}
+                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <button
+                    onClick={resetRotation}
+                    className="text-orange-400 hover:text-orange-300 p-1 rounded transition-colors"
+                    title="Reset rotation"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </button>
+                </div>
+                
+                {/* Number Input */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={Math.round(selectedCrop.rotation || 0)}
+                    onChange={(e) => handleRotationChange(e.target.value)}
+                    className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-gray-400">degrees</span>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => handleRotationChange('0')}
+                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                    >
+                      0°
+                    </button>
+                    <button
+                      onClick={() => handleRotationChange('90')}
+                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                    >
+                      90°
+                    </button>
+                    <button
+                      onClick={() => handleRotationChange('180')}
+                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                    >
+                      180°
+                    </button>
+                    <button
+                      onClick={() => handleRotationChange('270')}
+                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                    >
+                      270°
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
