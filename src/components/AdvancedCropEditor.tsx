@@ -26,9 +26,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   onSwitchCrop
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const referenceCanvasRef = useRef<HTMLCanvasElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
+  const [showUncropped, setShowUncropped] = useState(true);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
   const [exportQuality, setExportQuality] = useState(0.9);
   const [originalCropState, setOriginalCropState] = useState<CropArea | null>(null);
@@ -49,153 +49,208 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx || !originalImage || !crop) return;
 
-    // Set canvas size to crop dimensions
-    canvas.width = crop.width * previewScale;
-    canvas.height = crop.height * previewScale;
+    // Calculate canvas size to show both cropped and uncropped areas
+    let canvasWidth, canvasHeight;
+    
+    if (showUncropped) {
+      // Show the full image with crop highlighted
+      const imgAspect = originalImage.width / originalImage.height;
+      const maxSize = 600; // Maximum canvas size
+      
+      if (imgAspect > 1) {
+        canvasWidth = Math.min(maxSize, originalImage.width * previewScale);
+        canvasHeight = canvasWidth / imgAspect;
+      } else {
+        canvasHeight = Math.min(maxSize, originalImage.height * previewScale);
+        canvasWidth = canvasHeight * imgAspect;
+      }
+    } else {
+      // Show only the crop area
+      canvasWidth = crop.width * previewScale;
+      canvasHeight = crop.height * previewScale;
+    }
+
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Fill with white background
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (showUncropped) {
+      // Draw the full image at reduced opacity
+      ctx.globalAlpha = 0.3;
+      ctx.drawImage(
+        originalImage,
+        0,
+        0,
+        canvasWidth,
+        canvasHeight
+      );
 
-    // Calculate the actual crop coordinates relative to the original image
-    const imageX = (crop.x - imageOffset.x) / imageScale;
-    const imageY = (crop.y - imageOffset.y) / imageScale;
-    const imageWidth = crop.width / imageScale;
-    const imageHeight = crop.height / imageScale;
+      // Calculate crop area position on the full image canvas
+      const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
+      const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
+      const cropCanvasWidth = (crop.width / imageScale) * previewScale;
+      const cropCanvasHeight = (crop.height / imageScale) * previewScale;
 
-    // Apply rotation if present
-    const rotation = crop.rotation || 0;
-    if (rotation !== 0) {
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.translate(-canvas.width / 2, -canvas.height / 2);
-    }
+      // Draw the crop area at full opacity
+      ctx.globalAlpha = 1.0;
+      
+      // Apply rotation if present for the crop area
+      const rotation = crop.rotation || 0;
+      if (rotation !== 0) {
+        ctx.save();
+        const centerX = cropCanvasX + cropCanvasWidth / 2;
+        const centerY = cropCanvasY + cropCanvasHeight / 2;
+        ctx.translate(centerX, centerY);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-centerX, -centerY);
+      }
 
-    // Ensure crop is within image bounds
-    const cropX = Math.max(0, Math.min(imageX, originalImage.width));
-    const cropY = Math.max(0, Math.min(imageY, originalImage.height));
-    const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
-    const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
+      // Calculate source crop coordinates
+      const sourceX = (crop.x - imageOffset.x) / imageScale;
+      const sourceY = (crop.y - imageOffset.y) / imageScale;
+      const sourceWidth = crop.width / imageScale;
+      const sourceHeight = crop.height / imageScale;
 
-    // Draw the cropped portion
-    ctx.drawImage(
-      originalImage,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
+      // Ensure crop is within image bounds
+      const clampedSourceX = Math.max(0, Math.min(sourceX, originalImage.width));
+      const clampedSourceY = Math.max(0, Math.min(sourceY, originalImage.height));
+      const clampedSourceWidth = Math.max(1, Math.min(sourceWidth, originalImage.width - clampedSourceX));
+      const clampedSourceHeight = Math.max(1, Math.min(sourceHeight, originalImage.height - clampedSourceY));
 
-    if (rotation !== 0) {
-      ctx.restore();
+      // Draw the cropped portion at full opacity
+      ctx.drawImage(
+        originalImage,
+        clampedSourceX,
+        clampedSourceY,
+        clampedSourceWidth,
+        clampedSourceHeight,
+        cropCanvasX,
+        cropCanvasY,
+        cropCanvasWidth,
+        cropCanvasHeight
+      );
+
+      if (rotation !== 0) {
+        ctx.restore();
+      }
+
+      // Draw crop area border
+      ctx.strokeStyle = '#3B82F6';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([]);
+      ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
+
+      // Draw crop area overlay
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
+
+    } else {
+      // Show only the crop area (original behavior)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Calculate the actual crop coordinates relative to the original image
+      const imageX = (crop.x - imageOffset.x) / imageScale;
+      const imageY = (crop.y - imageOffset.y) / imageScale;
+      const imageWidth = crop.width / imageScale;
+      const imageHeight = crop.height / imageScale;
+
+      // Apply rotation if present
+      const rotation = crop.rotation || 0;
+      if (rotation !== 0) {
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+      }
+
+      // Ensure crop is within image bounds
+      const cropX = Math.max(0, Math.min(imageX, originalImage.width));
+      const cropY = Math.max(0, Math.min(imageY, originalImage.height));
+      const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
+      const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
+
+      // Draw the cropped portion
+      ctx.drawImage(
+        originalImage,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      if (rotation !== 0) {
+        ctx.restore();
+      }
     }
 
     // Draw grid overlay if enabled
     if (showGrid) {
+      ctx.globalAlpha = 1.0;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 2]);
       
-      // Rule of thirds grid
-      const gridWidth = canvas.width / 3;
-      const gridHeight = canvas.height / 3;
-      
-      // Vertical lines
-      for (let i = 1; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * gridWidth, 0);
-        ctx.lineTo(i * gridWidth, canvas.height);
-        ctx.stroke();
-      }
-      
-      // Horizontal lines
-      for (let i = 1; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(0, i * gridHeight);
-        ctx.lineTo(canvas.width, i * gridHeight);
-        ctx.stroke();
+      if (showUncropped) {
+        // Grid over the entire canvas
+        const gridWidth = canvas.width / 9; // 3x3 grid over full image
+        const gridHeight = canvas.height / 9;
+        
+        // Vertical lines
+        for (let i = 1; i < 9; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * gridWidth, 0);
+          ctx.lineTo(i * gridWidth, canvas.height);
+          ctx.stroke();
+        }
+        
+        // Horizontal lines
+        for (let i = 1; i < 9; i++) {
+          ctx.beginPath();
+          ctx.moveTo(0, i * gridHeight);
+          ctx.lineTo(canvas.width, i * gridHeight);
+          ctx.stroke();
+        }
+      } else {
+        // Rule of thirds grid over crop area only
+        const gridWidth = canvas.width / 3;
+        const gridHeight = canvas.height / 3;
+        
+        // Vertical lines
+        for (let i = 1; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * gridWidth, 0);
+          ctx.lineTo(i * gridWidth, canvas.height);
+          ctx.stroke();
+        }
+        
+        // Horizontal lines
+        for (let i = 1; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(0, i * gridHeight);
+          ctx.lineTo(canvas.width, i * gridHeight);
+          ctx.stroke();
+        }
       }
       
       ctx.setLineDash([]);
     }
-  }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid]);
 
-  const drawReference = useCallback(() => {
-    const canvas = referenceCanvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !originalImage || !crop) return;
-
-    // Set reference canvas size (smaller preview)
-    const referenceSize = 200;
-    canvas.width = referenceSize;
-    canvas.height = referenceSize;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Fill with dark background
-    ctx.fillStyle = '#374151';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Calculate scale to fit the image in the reference canvas
-    const scale = Math.min(referenceSize / originalImage.width, referenceSize / originalImage.height);
-    const scaledWidth = originalImage.width * scale;
-    const scaledHeight = originalImage.height * scale;
-    const offsetX = (referenceSize - scaledWidth) / 2;
-    const offsetY = (referenceSize - scaledHeight) / 2;
-
-    // Draw the full image
-    ctx.drawImage(
-      originalImage,
-      offsetX,
-      offsetY,
-      scaledWidth,
-      scaledHeight
-    );
-
-    // Draw crop area overlay
-    const cropX = ((crop.x - imageOffset.x) / imageScale) * scale + offsetX;
-    const cropY = ((crop.y - imageOffset.y) / imageScale) * scale + offsetY;
-    const cropWidth = (crop.width / imageScale) * scale;
-    const cropHeight = (crop.height / imageScale) * scale;
-
-    // Draw semi-transparent overlay on non-crop areas
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    
-    // Top
-    ctx.fillRect(0, 0, referenceSize, Math.max(0, cropY));
-    // Bottom
-    ctx.fillRect(0, cropY + cropHeight, referenceSize, referenceSize - (cropY + cropHeight));
-    // Left
-    ctx.fillRect(0, Math.max(0, cropY), Math.max(0, cropX), cropHeight);
-    // Right
-    ctx.fillRect(cropX + cropWidth, Math.max(0, cropY), referenceSize - (cropX + cropWidth), cropHeight);
-
-    // Draw crop area border
-    ctx.strokeStyle = '#3B82F6';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([]);
-    ctx.strokeRect(cropX, cropY, cropWidth, cropHeight);
-
-    // Draw crop area highlight
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
-    ctx.fillRect(cropX, cropY, cropWidth, cropHeight);
-  }, [originalImage, crop, imageScale, imageOffset]);
+    // Reset global alpha
+    ctx.globalAlpha = 1.0;
+  }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid, showUncropped]);
 
   useEffect(() => {
     if (isOpen) {
       drawPreview();
-      drawReference();
     }
-  }, [isOpen, drawPreview, drawReference]);
+  }, [isOpen, drawPreview]);
 
   const handleExport = async () => {
     const canvas = canvasRef.current;
@@ -277,6 +332,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
           </div>
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => setShowUncropped(!showUncropped)}
+              className={`p-2 rounded-lg transition-colors ${
+                showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+              title="Toggle uncropped area preview"
+            >
+              {showUncropped ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+            <button
               onClick={() => setShowGrid(!showGrid)}
               className={`p-2 rounded-lg transition-colors ${
                 showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -299,24 +363,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
           <div className="flex-1 bg-gray-800 flex flex-col">
             {/* Preview Canvas */}
             <div className="flex-1 flex items-center justify-center p-4 relative">
-              {/* Reference Image Preview */}
-              <div className="absolute top-4 left-4 bg-gray-700 rounded-lg p-2 shadow-lg border border-gray-600">
-                <div className="text-xs text-gray-300 mb-2 text-center">Reference</div>
-                <canvas
-                  ref={referenceCanvasRef}
-                  className="rounded border border-gray-500"
-                  style={{ 
-                    width: '120px',
-                    height: '120px',
-                    imageRendering: 'pixelated'
-                  }}
-                />
-                <div className="text-xs text-gray-400 mt-1 text-center">
-                  {Math.round(crop.width)} × {Math.round(crop.height)}
-                </div>
-              </div>
-
-              <div className="relative bg-gray-700 rounded-lg p-4 shadow-lg">
+              <div className="relative bg-gray-700 rounded-lg p-4 shadow-lg max-w-full max-h-full overflow-auto">
                 <canvas
                   ref={canvasRef}
                   className="max-w-full max-h-full rounded border border-gray-600"
@@ -329,12 +376,17 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 
                 {/* Preview Controls Overlay */}
                 <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  {Math.round(crop.width)} × {Math.round(crop.height)}
+                  {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
                   {crop.rotation && crop.rotation !== 0 && (
                     <span className="ml-2 text-orange-400">
                       ↻ {Math.round(crop.rotation)}°
                     </span>
                   )}
+                </div>
+
+                {/* View Mode Indicator */}
+                <div className="absolute top-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                  {showUncropped ? 'Context View' : 'Crop Only'}
                 </div>
               </div>
             </div>
@@ -434,6 +486,50 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <option value="webp">webp</option>
                   </select>
                 </div>
+              </div>
+
+              {/* View Options */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Show uncropped area</span>
+                  <button
+                    onClick={() => setShowUncropped(!showUncropped)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      showUncropped ? 'bg-purple-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        showUncropped ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Show grid</span>
+                  <button
+                    onClick={() => setShowGrid(!showGrid)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      showGrid ? 'bg-blue-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        showGrid ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {showUncropped && (
+                  <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
+                    <strong>Context View:</strong> Shows the full image with the crop area highlighted. 
+                    Uncropped areas are displayed at 30% opacity to provide visual context.
+                  </div>
+                )}
               </div>
 
               {/* Crop Properties */}
