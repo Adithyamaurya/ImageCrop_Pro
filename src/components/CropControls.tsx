@@ -220,7 +220,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 <div className="bg-gray-700 rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Grid Preview</h4>
                   <div className="text-xs text-gray-400 space-y-1">
-                    <div>• <strong>Total crops:</strong> {gridRows × gridCols}</div>
+                    <div>• <strong>Total crops:</strong> {gridRows * gridCols}</div>
                     <div>• <strong>Grid size:</strong> {gridRows} × {gridCols}</div>
                     <div>• <strong>Starting at:</strong> ({gridStartX}, {gridStartY})</div>
                     <div>• <strong>Layout:</strong> Perfect grid with no gaps</div>
