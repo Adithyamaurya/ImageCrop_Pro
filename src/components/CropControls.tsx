@@ -286,15 +286,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
               </div>
             </div>
 
-            {/* Copy Style Button */}
-            <button
-              onClick={() => onCopyCropStyle(selectedCrop.id)}
-              className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 px-4 text-sm transition-colors"
-            >
-              <Copy className="h-4 w-4" />
-              <span>Copy This Style</span>
-            </button>
-
             {/* Aspect Ratio */}
             <div>
               <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
