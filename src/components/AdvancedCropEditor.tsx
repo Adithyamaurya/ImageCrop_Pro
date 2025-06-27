@@ -34,13 +34,13 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const [exportQuality, setExportQuality] = useState(0.9);
   const [originalCropState, setOriginalCropState] = useState<CropArea | null>(null);
   
-  // Dragging state
+  // Interaction states
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [isHovering, setIsHovering] = useState(false);
-  const [dragAnimation, setDragAnimation] = useState(false);
   const [originalPosition, setOriginalPosition] = useState({ x: 0, y: 0 });
+  const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
 
   // Store the original crop state when the editor opens or when switching crops
   useEffect(() => {
@@ -52,21 +52,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const currentCropIndex = allCrops.findIndex(c => c.id === crop.id);
   const canGoPrevious = currentCropIndex > 0;
   const canGoNext = currentCropIndex < allCrops.length - 1;
-
-  // Calculate crop bounds within the image
-  const getCropBounds = useCallback(() => {
-    if (!originalImage) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-    
-    const imageWidth = originalImage.width * previewScale;
-    const imageHeight = originalImage.height * previewScale;
-    
-    return {
-      minX: 0,
-      minY: 0,
-      maxX: imageWidth - (crop.width / imageScale) * previewScale,
-      maxY: imageHeight - (crop.height / imageScale) * previewScale
-    };
-  }, [originalImage, previewScale, crop.width, crop.height, imageScale]);
 
   // Check if a point is within the crop area
   const isPointInCrop = useCallback((x: number, y: number) => {
@@ -81,26 +66,45 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
            y >= cropCanvasY && y <= cropCanvasY + cropCanvasHeight;
   }, [crop, imageScale, imageOffset, previewScale, showUncropped]);
 
+  // Get resize handle at position
+  const getResizeHandle = useCallback((x: number, y: number) => {
+    if (!showUncropped) return null;
+    
+    const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
+    const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
+    const cropCanvasWidth = (crop.width / imageScale) * previewScale;
+    const cropCanvasHeight = (crop.height / imageScale) * previewScale;
+    
+    const handleSize = 12;
+    const tolerance = handleSize / 2;
+    
+    // Corner handles
+    const handles = [
+      { name: 'nw', x: cropCanvasX, y: cropCanvasY },
+      { name: 'ne', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY },
+      { name: 'sw', x: cropCanvasX, y: cropCanvasY + cropCanvasHeight },
+      { name: 'se', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight },
+      { name: 'n', x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY },
+      { name: 's', x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY + cropCanvasHeight },
+      { name: 'w', x: cropCanvasX, y: cropCanvasY + cropCanvasHeight / 2 },
+      { name: 'e', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight / 2 },
+    ];
+    
+    for (const handle of handles) {
+      if (Math.abs(x - handle.x) <= tolerance && Math.abs(y - handle.y) <= tolerance) {
+        return handle.name;
+      }
+    }
+    
+    return null;
+  }, [crop, imageScale, imageOffset, previewScale, showUncropped]);
+
   // Convert canvas coordinates to image coordinates
   const canvasToImageCoords = useCallback((canvasX: number, canvasY: number) => {
     const imageX = (canvasX / previewScale) * imageScale + imageOffset.x;
     const imageY = (canvasY / previewScale) * imageScale + imageOffset.y;
     return { x: imageX, y: imageY };
   }, [previewScale, imageScale, imageOffset]);
-
-  // Constrain crop position within image bounds
-  const constrainCropPosition = useCallback((x: number, y: number) => {
-    if (!originalImage) return { x, y };
-    
-    const bounds = getCropBounds();
-    const imageCoords = canvasToImageCoords(x, y);
-    
-    // Convert back to canvas coordinates after constraining
-    const constrainedImageX = Math.max(imageOffset.x, Math.min(imageCoords.x, imageOffset.x + originalImage.width * imageScale - crop.width));
-    const constrainedImageY = Math.max(imageOffset.y, Math.min(imageCoords.y, imageOffset.y + originalImage.height * imageScale - crop.height));
-    
-    return { x: constrainedImageX, y: constrainedImageY };
-  }, [originalImage, getCropBounds, canvasToImageCoords, imageOffset, imageScale, crop.width, crop.height]);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -194,51 +198,45 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Draw crop area border - only show enhanced styling during drag, no hover effects
-      const borderColor = isDragging ? '#F59E0B' : '#3B82F6';
-      const borderWidth = isDragging ? 4 : 2;
+      // Draw crop area border - static blue, enhanced orange only during active interaction
+      const borderColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
+      const borderWidth = (isDragging || isResizing) ? 3 : 2;
       
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
-      ctx.setLineDash(isDragging ? [8, 4] : []);
+      ctx.setLineDash([]);
       ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
-      // Draw crop area overlay - enhanced opacity only during drag
-      const overlayOpacity = isDragging ? 0.2 : 0.1;
+      // Draw crop area overlay - enhanced only during interaction
+      const overlayOpacity = (isDragging || isResizing) ? 0.15 : 0.08;
       ctx.fillStyle = `rgba(59, 130, 246, ${overlayOpacity})`;
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
-      // Draw drag handles only during drag (no hover handles)
-      if (isDragging) {
-        const handleSize = 8;
-        const handleColor = '#F59E0B';
-        
-        ctx.fillStyle = handleColor;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([]);
-        
-        // Corner handles
-        const handles = [
-          { x: cropCanvasX, y: cropCanvasY }, // top-left
-          { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY }, // top-right
-          { x: cropCanvasX, y: cropCanvasY + cropCanvasHeight }, // bottom-left
-          { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight }, // bottom-right
-        ];
-        
-        handles.forEach(handle => {
-          ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
-          ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
-        });
-        
-        // Center handle for dragging
-        const centerX = cropCanvasX + cropCanvasWidth / 2;
-        const centerY = cropCanvasY + cropCanvasHeight / 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, handleSize/2 + 2, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      }
+      // Draw resize handles - always visible in context view
+      const handleSize = 10;
+      const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
+      
+      ctx.fillStyle = handleColor;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      
+      // Corner handles
+      const handles = [
+        { x: cropCanvasX, y: cropCanvasY }, // nw
+        { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY }, // ne
+        { x: cropCanvasX, y: cropCanvasY + cropCanvasHeight }, // sw
+        { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight }, // se
+        { x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY }, // n
+        { x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY + cropCanvasHeight }, // s
+        { x: cropCanvasX, y: cropCanvasY + cropCanvasHeight / 2 }, // w
+        { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight / 2 }, // e
+      ];
+      
+      handles.forEach(handle => {
+        ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+        ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+      });
 
     } else {
       // Show only the crop area (original behavior)
@@ -283,8 +281,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Add border for crop-only mode - only enhanced during drag
-      if (isDragging) {
+      // Add border for crop-only mode - enhanced only during interaction
+      if (isDragging || isResizing) {
         ctx.strokeStyle = '#F59E0B';
         ctx.lineWidth = 3;
         ctx.setLineDash([6, 3]);
@@ -347,7 +345,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid, showUncropped, isDragging]);
+  }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid, showUncropped, isDragging, isResizing]);
 
   useEffect(() => {
     if (isOpen) {
@@ -355,7 +353,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   }, [isOpen, drawPreview]);
 
-  // Mouse event handlers for dragging
+  // Mouse event handlers
   const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -370,19 +368,22 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
     
+    // Check for resize handle first
+    const handle = getResizeHandle(pos.x, pos.y);
+    if (handle) {
+      setIsResizing(true);
+      setResizeHandle(handle);
+      setDragStart(pos);
+      setOriginalPosition({ x: crop.x, y: crop.y });
+      setOriginalSize({ width: crop.width, height: crop.height });
+      return;
+    }
+    
+    // Check if clicking within crop area for dragging
     if (isPointInCrop(pos.x, pos.y)) {
       setIsDragging(true);
       setDragStart(pos);
-      setDragOffset({ x: 0, y: 0 });
       setOriginalPosition({ x: crop.x, y: crop.y });
-      setDragAnimation(true);
-      setIsHovering(false); // Completely disable hover during drag
-      
-      // Add drag cursor
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.style.cursor = 'grabbing';
-      }
     }
   };
 
@@ -390,117 +391,133 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const pos = getMousePos(e);
     const canvas = canvasRef.current;
     
-    if (isDragging) {
-      // Calculate drag offset
+    if (isResizing && resizeHandle) {
+      // Handle resizing
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
-      setDragOffset({ x: deltaX, y: deltaY });
+      
+      // Convert deltas to image coordinates
+      const imageDeltaX = (deltaX / previewScale) * imageScale;
+      const imageDeltaY = (deltaY / previewScale) * imageScale;
+      
+      let newCrop = { ...crop };
+      
+      switch (resizeHandle) {
+        case 'nw':
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.x = originalPosition.x + imageDeltaX;
+          newCrop.y = originalPosition.y + imageDeltaY;
+          break;
+        case 'ne':
+          newCrop.width = originalSize.width + imageDeltaX;
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.y = originalPosition.y + imageDeltaY;
+          break;
+        case 'sw':
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.height = originalSize.height + imageDeltaY;
+          newCrop.x = originalPosition.x + imageDeltaX;
+          break;
+        case 'se':
+          newCrop.width = originalSize.width + imageDeltaX;
+          newCrop.height = originalSize.height + imageDeltaY;
+          break;
+        case 'n':
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.y = originalPosition.y + imageDeltaY;
+          break;
+        case 's':
+          newCrop.height = originalSize.height + imageDeltaY;
+          break;
+        case 'w':
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.x = originalPosition.x + imageDeltaX;
+          break;
+        case 'e':
+          newCrop.width = originalSize.width + imageDeltaX;
+          break;
+      }
+      
+      // Maintain aspect ratio if set
+      if (crop.aspectRatio && crop.aspectRatio > 0) {
+        if (['nw', 'ne', 'sw', 'se'].includes(resizeHandle)) {
+          if (resizeHandle === 'nw' || resizeHandle === 'se') {
+            newCrop.height = newCrop.width / crop.aspectRatio;
+          } else {
+            newCrop.width = newCrop.height * crop.aspectRatio;
+          }
+        }
+      }
+      
+      // Ensure minimum size
+      newCrop.width = Math.max(20, newCrop.width);
+      newCrop.height = Math.max(20, newCrop.height);
+      
+      onUpdateCrop(newCrop);
+      
+    } else if (isDragging) {
+      // Handle dragging - NO HOVER EFFECTS, ONLY DRAG
+      const deltaX = pos.x - dragStart.x;
+      const deltaY = pos.y - dragStart.y;
       
       // Convert canvas delta to image coordinates
       const imageDeltaX = (deltaX / previewScale) * imageScale;
       const imageDeltaY = (deltaY / previewScale) * imageScale;
       
       // Calculate new position
-      let newX = originalPosition.x + imageDeltaX;
-      let newY = originalPosition.y + imageDeltaY;
+      const newX = originalPosition.x + imageDeltaX;
+      const newY = originalPosition.y + imageDeltaY;
       
-      // Maintain aspect ratio if locked
-      if (crop.aspectRatio && crop.aspectRatio > 0) {
-        // Keep the same aspect ratio constraint during drag
-        // This is mainly for visual consistency
-      }
-      
-      // Constrain to image bounds
-      const constrainedPos = constrainCropPosition(newX, newY);
-      
-      // Update crop position with smooth animation
       onUpdateCrop({
-        x: constrainedPos.x,
-        y: constrainedPos.y
+        x: newX,
+        y: newY
       });
       
     } else {
-      // Only handle hover state when NOT dragging
-      if (!isDragging) {
-        const wasHovering = isHovering;
-        const nowHovering = isPointInCrop(pos.x, pos.y);
-        
-        if (nowHovering !== wasHovering) {
-          setIsHovering(nowHovering);
-          
-          // Update cursor only when not dragging
-          if (canvas) {
-            canvas.style.cursor = nowHovering ? 'grab' : 'default';
-          }
+      // Update cursor based on what's under mouse - ONLY when not interacting
+      if (canvas && !isDragging && !isResizing) {
+        const handle = getResizeHandle(pos.x, pos.y);
+        if (handle) {
+          // Set resize cursors
+          const cursorMap: { [key: string]: string } = {
+            'nw': 'nw-resize',
+            'ne': 'ne-resize',
+            'sw': 'sw-resize',
+            'se': 'se-resize',
+            'n': 'n-resize',
+            's': 's-resize',
+            'w': 'w-resize',
+            'e': 'e-resize'
+          };
+          canvas.style.cursor = cursorMap[handle] || 'default';
+        } else if (isPointInCrop(pos.x, pos.y)) {
+          canvas.style.cursor = 'move';
+        } else {
+          canvas.style.cursor = 'default';
         }
       }
     }
   };
 
   const handleMouseUp = () => {
-    if (isDragging) {
-      // Check if crop is within valid bounds
-      const bounds = getCropBounds();
-      const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
-      const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
-      
-      // If crop is outside bounds, animate back to original position
-      if (originalImage && (
-        cropCanvasX < bounds.minX || 
-        cropCanvasY < bounds.minY || 
-        cropCanvasX > bounds.maxX || 
-        cropCanvasY > bounds.maxY
-      )) {
-        // Animate back to original position
-        setDragAnimation(true);
-        setTimeout(() => {
-          onUpdateCrop({
-            x: originalPosition.x,
-            y: originalPosition.y
-          });
-          setDragAnimation(false);
-        }, 150);
-      } else {
-        // Valid position, end drag animation
-        setTimeout(() => setDragAnimation(false), 100);
-      }
-    }
-    
     setIsDragging(false);
-    setDragOffset({ x: 0, y: 0 });
+    setIsResizing(false);
+    setResizeHandle(null);
     
-    // Reset cursor and allow hover detection to resume
+    // Reset cursor
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.style.cursor = 'default';
     }
-    
-    // Re-enable hover detection after drag completes
-    setTimeout(() => {
-      if (!isDragging) {
-        setIsHovering(false);
-      }
-    }, 100);
   };
 
   const handleMouseLeave = () => {
-    if (isDragging) {
-      // If dragging and mouse leaves, reset to original position
-      setDragAnimation(true);
-      setTimeout(() => {
-        onUpdateCrop({
-          x: originalPosition.x,
-          y: originalPosition.y
-        });
-        setDragAnimation(false);
-      }, 200);
-    }
-    
+    // Reset all interaction states when mouse leaves
     setIsDragging(false);
-    setIsHovering(false);
-    setDragOffset({ x: 0, y: 0 });
+    setIsResizing(false);
+    setResizeHandle(null);
     
-    // Reset cursor
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.style.cursor = 'default';
@@ -584,9 +601,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 Modified
               </div>
             )}
-            {isDragging && (
+            {(isDragging || isResizing) && (
               <div className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded animate-pulse">
-                Dragging
+                {isDragging ? 'Moving' : 'Resizing'}
               </div>
             )}
           </div>
@@ -625,20 +642,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             <div className="flex-1 flex items-center justify-center p-4 relative">
               <div 
                 ref={containerRef}
-                className={`relative bg-gray-700 rounded-lg p-4 shadow-lg max-w-full max-h-full overflow-auto transition-all duration-200 ${
-                  dragAnimation ? 'scale-105' : ''
-                } ${isDragging ? 'shadow-2xl' : ''}`}
+                className="relative bg-gray-700 rounded-lg p-4 shadow-lg max-w-full max-h-full overflow-auto"
               >
                 <canvas
                   ref={canvasRef}
-                  className={`max-w-full max-h-full rounded border border-gray-600 transition-all duration-150 ${
-                    isDragging ? 'border-orange-400 shadow-lg' : ''
-                  }`}
+                  className="max-w-full max-h-full rounded border border-gray-600"
                   style={{ 
                     imageRendering: 'pixelated',
                     maxWidth: '100%',
                     maxHeight: '100%',
-                    cursor: isDragging ? 'grabbing' : 'grab'
+                    cursor: 'default'
                   }}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
@@ -654,9 +667,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                       ↻ {Math.round(crop.rotation)}°
                     </span>
                   )}
-                  {isDragging && (
+                  {(isDragging || isResizing) && (
                     <span className="ml-2 text-blue-400">
-                      • Dragging
+                      • {isDragging ? 'Moving' : 'Resizing'}
                     </span>
                   )}
                 </div>
@@ -666,10 +679,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   {showUncropped ? 'Context View' : 'Crop Only'}
                 </div>
 
-                {/* Drag Instructions - Only show when not dragging and not hovering */}
-                {showUncropped && !isDragging && (
+                {/* Interaction Instructions */}
+                {showUncropped && !isDragging && !isResizing && (
                   <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                    Click and drag the crop area to move it
+                    Drag crop to move • Drag handles to resize
                   </div>
                 )}
               </div>
@@ -772,17 +785,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* Drag Controls Info */}
+              {/* Interaction Controls Info */}
               <div className="bg-gray-800 rounded-lg p-3">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">Drag Controls</h4>
+                <h4 className="text-sm font-semibold text-gray-300 mb-2">Interaction Controls</h4>
                 <div className="text-xs text-gray-400 space-y-1">
-                  <div>• Click and drag crop area to move</div>
-                  <div>• No hover effects during drag</div>
-                  <div>• Canvas stays completely stationary</div>
-                  <div>• Maintains aspect ratio if locked</div>
-                  <div>• Auto-constrains to image bounds</div>
-                  <div>• Returns to original if dragged outside</div>
-                  <div>• Visual feedback only during active drag</div>
+                  <div>• <strong>Drag crop area:</strong> Move position</div>
+                  <div>• <strong>Drag corner handles:</strong> Resize proportionally</div>
+                  <div>• <strong>Drag edge handles:</strong> Resize single dimension</div>
+                  <div>• <strong>No hover effects:</strong> Clean interaction</div>
+                  <div>• <strong>Maintains aspect ratio:</strong> If locked</div>
+                  <div>• <strong>Visual feedback:</strong> Only during active interaction</div>
                 </div>
               </div>
 
@@ -825,8 +837,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 {showUncropped && (
                   <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
                     <strong>Context View:</strong> Shows the full image with the crop area highlighted. 
-                    Uncropped areas are displayed at 30% opacity. Click and drag the blue highlighted area to move the crop.
-                    No hover effects during drag operations.
+                    Uncropped areas are displayed at 30% opacity. Drag the crop area to move it, or drag the handles to resize.
+                    No hover effects during interaction for clean, focused editing.
                   </div>
                 )}
               </div>
