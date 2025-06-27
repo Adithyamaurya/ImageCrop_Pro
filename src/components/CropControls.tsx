@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw, Grid3X3 } from 'lucide-react';
 import { CropArea } from '../App';
+import { PositionSelector } from './PositionSelector';
 
 interface CropControlsProps {
   cropAreas: CropArea[];
@@ -11,6 +12,11 @@ interface CropControlsProps {
   onSelectCrop: (id: string | null) => void;
   onCopyCropStyle: (cropId: string) => void;
   onAddMultipleCrops: (rows: number, cols: number, startX: number, startY: number) => void;
+}
+
+interface Position {
+  x: number;
+  y: number;
 }
 
 const ASPECT_RATIOS = [
@@ -39,6 +45,10 @@ export const CropControls: React.FC<CropControlsProps> = ({
   const [gridCols, setGridCols] = useState(2);
   const [gridStartX, setGridStartX] = useState(100);
   const [gridStartY, setGridStartY] = useState(100);
+  
+  // Position selector state
+  const [positionSelectorActive, setPositionSelectorActive] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
 
   const handleAspectRatioChange = (ratio: number) => {
     if (!selectedCrop) return;
@@ -100,7 +110,9 @@ export const CropControls: React.FC<CropControlsProps> = ({
 
   const handleCreateMultipleCrops = () => {
     if (gridRows > 0 && gridCols > 0) {
-      onAddMultipleCrops(gridRows, gridCols, gridStartX, gridStartY);
+      const startX = selectedPosition?.x || gridStartX;
+      const startY = selectedPosition?.y || gridStartY;
+      onAddMultipleCrops(gridRows, gridCols, startX, startY);
       setShowMultipleDialog(false);
     }
   };
@@ -113,8 +125,32 @@ export const CropControls: React.FC<CropControlsProps> = ({
     }
   };
 
+  const handlePositionUpdate = (position: Position) => {
+    setSelectedPosition(position);
+    setGridStartX(position.x);
+    setGridStartY(position.y);
+  };
+
+  // Expose position selector state to parent component
+  React.useEffect(() => {
+    // Add position selector state to window for canvas access
+    (window as any).positionSelectorState = {
+      isActive: positionSelectorActive,
+      onPositionSelect: setSelectedPosition
+    };
+  }, [positionSelectorActive]);
+
   return (
     <div className="p-4 space-y-6 flex-1 overflow-y-auto">
+      {/* Position Selector Tool */}
+      <PositionSelector
+        isActive={positionSelectorActive}
+        onToggle={() => setPositionSelectorActive(!positionSelectorActive)}
+        selectedPosition={selectedPosition}
+        onPositionSelect={setSelectedPosition}
+        onPositionUpdate={handlePositionUpdate}
+      />
+
       {/* Add Crop Buttons */}
       <div className="space-y-3">
         <button
@@ -195,8 +231,14 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     <input
                       type="number"
                       min="0"
-                      value={gridStartX}
-                      onChange={(e) => setGridStartX(Math.max(0, parseInt(e.target.value) || 0))}
+                      value={selectedPosition?.x || gridStartX}
+                      onChange={(e) => {
+                        const newX = Math.max(0, parseInt(e.target.value) || 0);
+                        setGridStartX(newX);
+                        if (selectedPosition) {
+                          setSelectedPosition({ ...selectedPosition, x: newX });
+                        }
+                      }}
                       onKeyDown={handleMultipleDialogKeyPress}
                       className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
@@ -208,13 +250,31 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     <input
                       type="number"
                       min="0"
-                      value={gridStartY}
-                      onChange={(e) => setGridStartY(Math.max(0, parseInt(e.target.value) || 0))}
+                      value={selectedPosition?.y || gridStartY}
+                      onChange={(e) => {
+                        const newY = Math.max(0, parseInt(e.target.value) || 0);
+                        setGridStartY(newY);
+                        if (selectedPosition) {
+                          setSelectedPosition({ ...selectedPosition, y: newY });
+                        }
+                      }}
                       onKeyDown={handleMultipleDialogKeyPress}
                       className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
                   </div>
                 </div>
+
+                {/* Position Selector Integration */}
+                {selectedPosition && (
+                  <div className="bg-green-600/20 border border-green-500 rounded-lg p-3">
+                    <div className="text-sm text-green-400 font-medium mb-1">
+                      Using Selected Position
+                    </div>
+                    <div className="text-xs text-green-300">
+                      X: {selectedPosition.x}, Y: {selectedPosition.y}
+                    </div>
+                  </div>
+                )}
 
                 {/* Preview Info */}
                 <div className="bg-gray-700 rounded-lg p-4">
@@ -222,7 +282,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   <div className="text-xs text-gray-400 space-y-1">
                     <div>• <strong>Total crops:</strong> {gridRows * gridCols}</div>
                     <div>• <strong>Grid size:</strong> {gridRows} × {gridCols}</div>
-                    <div>• <strong>Starting at:</strong> ({gridStartX}, {gridStartY})</div>
+                    <div>• <strong>Starting at:</strong> ({selectedPosition?.x || gridStartX}, {selectedPosition?.y || gridStartY})</div>
                     <div>• <strong>Layout:</strong> Perfect grid with no gaps</div>
                     <div>• <strong>Naming:</strong> Grid_R{gridRows}C{gridCols}_[row]_[col]</div>
                   </div>
