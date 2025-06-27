@@ -80,12 +80,15 @@ export const CropEditor: React.FC<CropEditorProps> = ({
 
   const addMultipleCrops = (rows: number, cols: number, startX: number, startY: number) => {
     const newCrops: CropArea[] = [];
-    const cropWidth = 150; // Standard crop width
-    const cropHeight = 150; // Standard crop height
+    const cropSize = 150; // Standard crop size
+    const spacing = 0; // No spacing for perfect grid alignment
+    
+    // Generate unique grid ID
+    const gridId = `grid-${Date.now()}`;
     
     // Calculate total grid dimensions
-    const totalGridWidth = cols * cropWidth;
-    const totalGridHeight = rows * cropHeight;
+    const totalGridWidth = cols * cropSize + (cols - 1) * spacing;
+    const totalGridHeight = rows * cropSize + (rows - 1) * spacing;
     
     // Adjust starting position if grid would extend beyond canvas
     const adjustedStartX = Math.min(startX, Math.max(50, canvasSize.width - totalGridWidth - 50));
@@ -93,18 +96,20 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const cropX = adjustedStartX + (col * cropWidth);
-        const cropY = adjustedStartY + (row * cropHeight);
+        const cropX = adjustedStartX + (col * (cropSize + spacing));
+        const cropY = adjustedStartY + (row * (cropSize + spacing));
         
         const newCrop: CropArea = {
           id: `grid-crop-${Date.now()}-${row}-${col}`,
           x: cropX,
           y: cropY,
-          width: cropWidth,
-          height: cropHeight,
+          width: cropSize,
+          height: cropSize,
           aspectRatio: 1, // Square crops by default
           rotation: 0,
-          name: `Grid_R${rows}C${cols}_${row + 1}_${col + 1}`
+          name: `Grid_R${rows}C${cols}_${row + 1}_${col + 1}`,
+          gridId: gridId,
+          gridPosition: { row, col }
         };
         
         newCrops.push(newCrop);
@@ -118,6 +123,44 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     if (newCrops.length > 0) {
       setSelectedCropId(newCrops[0].id);
     }
+  };
+
+  const updateGridCrops = (gridId: string, updates: Partial<CropArea>) => {
+    setCropAreas(crops => 
+      crops.map(crop => {
+        if (crop.gridId === gridId) {
+          const updatedCrop = { ...crop, ...updates };
+          
+          // For grid crops, maintain relative positioning when resizing
+          if (updates.width !== undefined || updates.height !== undefined) {
+            const gridCrops = crops.filter(c => c.gridId === gridId);
+            const firstCrop = gridCrops.find(c => c.gridPosition?.row === 0 && c.gridPosition?.col === 0);
+            
+            if (firstCrop && crop.gridPosition) {
+              const newWidth = updates.width || crop.width;
+              const newHeight = updates.height || crop.height;
+              const spacing = 0; // No spacing for perfect alignment
+              
+              updatedCrop.x = firstCrop.x + (crop.gridPosition.col * (newWidth + spacing));
+              updatedCrop.y = firstCrop.y + (crop.gridPosition.row * (newHeight + spacing));
+            }
+          }
+          
+          return updatedCrop;
+        }
+        return crop;
+      })
+    );
+  };
+
+  const unlinkFromGrid = (cropId: string) => {
+    setCropAreas(crops => 
+      crops.map(crop => 
+        crop.id === cropId 
+          ? { ...crop, gridId: undefined, gridPosition: undefined }
+          : crop
+      )
+    );
   };
 
   const copyCropStyle = (sourceCropId: string) => {
@@ -140,6 +183,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       aspectRatio: sourceCrop.aspectRatio,
       rotation: sourceCrop.rotation || 0,
       name: `${sourceCrop.name} Copy`
+      // Note: Don't copy gridId or gridPosition for individual copies
     };
 
     setCropAreas([...cropAreas, newCrop]);
@@ -171,7 +215,11 @@ export const CropEditor: React.FC<CropEditorProps> = ({
 
   const handleAdvancedCropUpdate = (updates: Partial<CropArea>) => {
     if (advancedEditingCrop) {
-      updateCropArea(advancedEditingCrop.id, updates);
+      if (advancedEditingCrop.gridId) {
+        updateGridCrops(advancedEditingCrop.gridId, updates);
+      } else {
+        updateCropArea(advancedEditingCrop.id, updates);
+      }
       setAdvancedEditingCrop(prev => prev ? { ...prev, ...updates } : null);
     }
   };
@@ -200,6 +248,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onSelectCrop={setSelectedCropId}
             onCopyCropStyle={copyCropStyle}
             onAddMultipleCrops={addMultipleCrops}
+            onUpdateGridCrops={updateGridCrops}
+            onUnlinkFromGrid={unlinkFromGrid}
           />
         </div>
 
@@ -221,6 +271,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             }}
             onCanvasResize={setCanvasSize}
             onCropDoubleClick={handleCropDoubleClick}
+            onUpdateGridCrops={updateGridCrops}
           />
         </div>
 

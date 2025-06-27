@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw, Grid3X3 } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw, Grid3X3, Link, Unlink } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface CropControlsProps {
@@ -11,6 +11,8 @@ interface CropControlsProps {
   onSelectCrop: (id: string | null) => void;
   onCopyCropStyle: (cropId: string) => void;
   onAddMultipleCrops: (rows: number, cols: number, startX: number, startY: number) => void;
+  onUpdateGridCrops: (gridId: string, updates: Partial<CropArea>) => void;
+  onUnlinkFromGrid: (cropId: string) => void;
 }
 
 const ASPECT_RATIOS = [
@@ -30,7 +32,9 @@ export const CropControls: React.FC<CropControlsProps> = ({
   onDeleteCrop,
   onSelectCrop,
   onCopyCropStyle,
-  onAddMultipleCrops
+  onAddMultipleCrops,
+  onUpdateGridCrops,
+  onUnlinkFromGrid
 }) => {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
@@ -39,6 +43,8 @@ export const CropControls: React.FC<CropControlsProps> = ({
   const [gridCols, setGridCols] = useState(2);
   const [gridStartX, setGridStartX] = useState(100);
   const [gridStartY, setGridStartY] = useState(100);
+  const [gridCropSize, setGridCropSize] = useState(150);
+  const [gridSpacing, setGridSpacing] = useState(0);
 
   const handleAspectRatioChange = (ratio: number) => {
     if (!selectedCrop) return;
@@ -48,10 +54,17 @@ export const CropControls: React.FC<CropControlsProps> = ({
       newHeight = selectedCrop.width / ratio;
     }
     
-    onUpdateCrop(selectedCrop.id, { 
+    const updates = { 
       aspectRatio: ratio || undefined,
       height: newHeight
-    });
+    };
+
+    // If this crop is part of a grid, update all crops in the grid
+    if (selectedCrop.gridId) {
+      onUpdateGridCrops(selectedCrop.gridId, updates);
+    } else {
+      onUpdateCrop(selectedCrop.id, updates);
+    }
   };
 
   const startRename = (crop: CropArea) => {
@@ -82,7 +95,13 @@ export const CropControls: React.FC<CropControlsProps> = ({
 
   const resetRotation = () => {
     if (selectedCrop) {
-      onUpdateCrop(selectedCrop.id, { rotation: 0 });
+      const updates = { rotation: 0 };
+      
+      if (selectedCrop.gridId) {
+        onUpdateGridCrops(selectedCrop.gridId, updates);
+      } else {
+        onUpdateCrop(selectedCrop.id, updates);
+      }
     }
   };
 
@@ -95,7 +114,13 @@ export const CropControls: React.FC<CropControlsProps> = ({
     // Normalize to 0-360 range
     rotation = ((rotation % 360) + 360) % 360;
     
-    onUpdateCrop(selectedCrop.id, { rotation });
+    const updates = { rotation };
+    
+    if (selectedCrop.gridId) {
+      onUpdateGridCrops(selectedCrop.gridId, updates);
+    } else {
+      onUpdateCrop(selectedCrop.id, updates);
+    }
   };
 
   const handleCreateMultipleCrops = () => {
@@ -112,6 +137,34 @@ export const CropControls: React.FC<CropControlsProps> = ({
       setShowMultipleDialog(false);
     }
   };
+
+  const handleCropUpdate = (updates: Partial<CropArea>) => {
+    if (!selectedCrop) return;
+    
+    if (selectedCrop.gridId) {
+      onUpdateGridCrops(selectedCrop.gridId, updates);
+    } else {
+      onUpdateCrop(selectedCrop.id, updates);
+    }
+  };
+
+  // Get grid information for selected crop
+  const getGridInfo = (crop: CropArea) => {
+    if (!crop.gridId) return null;
+    
+    const gridCrops = cropAreas.filter(c => c.gridId === crop.gridId);
+    const rows = Math.max(...gridCrops.map(c => c.gridPosition?.row || 0)) + 1;
+    const cols = Math.max(...gridCrops.map(c => c.gridPosition?.col || 0)) + 1;
+    
+    return {
+      totalCrops: gridCrops.length,
+      rows,
+      cols,
+      gridId: crop.gridId
+    };
+  };
+
+  const gridInfo = selectedCrop ? getGridInfo(selectedCrop) : null;
 
   return (
     <div className="p-4 space-y-6 flex-1 overflow-y-auto">
@@ -130,7 +183,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
           className="w-full flex items-center justify-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-3 px-4 transition-colors"
         >
           <Grid3X3 className="h-5 w-5" />
-          <span>Add Multiple Crops</span>
+          <span>Add Uniform Grid</span>
         </button>
       </div>
 
@@ -142,7 +195,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-white flex items-center">
                   <Grid3X3 className="h-5 w-5 mr-2" />
-                  Create Crop Grid
+                  Create Uniform Grid
                 </h3>
                 <button
                   onClick={() => setShowMultipleDialog(false)}
@@ -186,6 +239,38 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   </div>
                 </div>
 
+                {/* Crop Size and Spacing */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Crop Size (px)
+                    </label>
+                    <input
+                      type="number"
+                      min="50"
+                      max="500"
+                      value={gridCropSize}
+                      onChange={(e) => setGridCropSize(Math.max(50, Math.min(500, parseInt(e.target.value) || 150)))}
+                      onKeyDown={handleMultipleDialogKeyPress}
+                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Spacing (px)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={gridSpacing}
+                      onChange={(e) => setGridSpacing(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                      onKeyDown={handleMultipleDialogKeyPress}
+                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 {/* Starting Position */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -222,9 +307,11 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   <div className="text-xs text-gray-400 space-y-1">
                     <div>• <strong>Total crops:</strong> {gridRows * gridCols}</div>
                     <div>• <strong>Grid size:</strong> {gridRows} × {gridCols}</div>
-                    <div>• <strong>Starting at:</strong> ({gridStartX}, {gridStartY})</div>
-                    <div>• <strong>Layout:</strong> Perfect grid with no gaps</div>
-                    <div>• <strong>Naming:</strong> Grid_R{gridRows}C{gridCols}_[row]_[col]</div>
+                    <div>• <strong>Crop dimensions:</strong> {gridCropSize} × {gridCropSize}</div>
+                    <div>• <strong>Spacing:</strong> {gridSpacing}px between crops</div>
+                    <div>• <strong>Total width:</strong> {gridCols * gridCropSize + (gridCols - 1) * gridSpacing}px</div>
+                    <div>• <strong>Total height:</strong> {gridRows * gridCropSize + (gridRows - 1) * gridSpacing}px</div>
+                    <div>• <strong>Synchronized editing:</strong> All crops update together</div>
                   </div>
                 </div>
 
@@ -232,9 +319,10 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 <div className="bg-gray-700 rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Layout Preview</h4>
                   <div 
-                    className="grid gap-1 mx-auto"
+                    className="grid mx-auto"
                     style={{ 
                       gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+                      gap: `${Math.max(1, gridSpacing / 10)}px`,
                       maxWidth: '200px'
                     }}
                   >
@@ -266,7 +354,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   onClick={handleCreateMultipleCrops}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 px-4 transition-colors"
                 >
-                  Create Grid
+                  Create Uniform Grid
                 </button>
               </div>
             </div>
@@ -326,9 +414,29 @@ export const CropControls: React.FC<CropControlsProps> = ({
                         className="flex-1 cursor-pointer"
                         onClick={() => onSelectCrop(crop.id)}
                       >
-                        <span className="text-sm font-medium text-white">{crop.name}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-white">{crop.name}</span>
+                          {crop.gridId && (
+                            <div className="flex items-center space-x-1">
+                              <Link className="h-3 w-3 text-purple-400" />
+                              <span className="text-xs text-purple-400">Grid</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center space-x-1">
+                        {crop.gridId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnlinkFromGrid(crop.id);
+                            }}
+                            className="text-purple-400 hover:text-purple-300 p-1 rounded transition-colors"
+                            title="Unlink from grid"
+                          >
+                            <Unlink className="h-3 w-3" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -381,6 +489,11 @@ export const CropControls: React.FC<CropControlsProps> = ({
                           `${crop.aspectRatio.toFixed(2)}:1`})
                       </span>
                     )}
+                    {crop.gridPosition && (
+                      <span className="ml-2 text-purple-400">
+                        [{crop.gridPosition.row + 1},{crop.gridPosition.col + 1}]
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -395,7 +508,23 @@ export const CropControls: React.FC<CropControlsProps> = ({
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center">
             <Square className="h-4 w-4 mr-2" />
             Edit Crop Area
+            {gridInfo && (
+              <div className="ml-2 flex items-center space-x-1 text-purple-400">
+                <Link className="h-3 w-3" />
+                <span className="text-xs">Grid ({gridInfo.rows}×{gridInfo.cols})</span>
+              </div>
+            )}
           </h3>
+          
+          {gridInfo && (
+            <div className="mb-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+              <div className="text-xs text-purple-300 space-y-1">
+                <div><strong>Grid Mode:</strong> Changes apply to all {gridInfo.totalCrops} crops</div>
+                <div><strong>Position:</strong> Row {(selectedCrop.gridPosition?.row || 0) + 1}, Column {(selectedCrop.gridPosition?.col || 0) + 1}</div>
+                <div><strong>Synchronized:</strong> Size, rotation, aspect ratio</div>
+              </div>
+            </div>
+          )}
           
           <div className="space-y-4">
             {/* Name */}
@@ -415,12 +544,23 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 >
                   <Edit3 className="h-4 w-4" />
                 </button>
+                {selectedCrop.gridId && (
+                  <button
+                    onClick={() => onUnlinkFromGrid(selectedCrop.id)}
+                    className="text-purple-400 hover:text-purple-300 p-2 rounded transition-colors"
+                    title="Unlink from grid"
+                  >
+                    <Unlink className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Rotation Control */}
             <div>
-              <label className="block text-xs text-gray-400 mb-2">Rotation</label>
+              <label className="block text-xs text-gray-400 mb-2">
+                Rotation {gridInfo && <span className="text-purple-400">(Grid Synchronized)</span>}
+              </label>
               <div className="space-y-2">
                 {/* Slider */}
                 <div className="flex items-center space-x-2">
@@ -430,7 +570,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     max="360"
                     step="1"
                     value={selectedCrop.rotation || 0}
-                    onChange={(e) => onUpdateCrop(selectedCrop.id, { rotation: parseFloat(e.target.value) })}
+                    onChange={(e) => handleRotationChange(e.target.value)}
                     className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                   />
                   <button
@@ -460,7 +600,9 @@ export const CropControls: React.FC<CropControlsProps> = ({
 
             {/* Aspect Ratio */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
+              <label className="block text-xs text-gray-400 mb-1">
+                Aspect Ratio {gridInfo && <span className="text-purple-400">(Grid Synchronized)</span>}
+              </label>
               <select
                 value={selectedCrop.aspectRatio || 0}
                 onChange={(e) => handleAspectRatioChange(parseFloat(e.target.value))}
@@ -477,7 +619,9 @@ export const CropControls: React.FC<CropControlsProps> = ({
             {/* Dimensions */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Width</label>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Width {gridInfo && <span className="text-purple-400">(Grid)</span>}
+                </label>
                 <input
                   type="number"
                   value={Math.round(selectedCrop.width)}
@@ -487,14 +631,16 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     if (selectedCrop.aspectRatio) {
                       updates.height = width / selectedCrop.aspectRatio;
                     }
-                    onUpdateCrop(selectedCrop.id, updates);
+                    handleCropUpdate(updates);
                   }}
                   className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   min="1"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Height</label>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Height {gridInfo && <span className="text-purple-400">(Grid)</span>}
+                </label>
                 <input
                   type="number"
                   value={Math.round(selectedCrop.height)}
@@ -504,7 +650,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     if (selectedCrop.aspectRatio) {
                       updates.width = height * selectedCrop.aspectRatio;
                     }
-                    onUpdateCrop(selectedCrop.id, updates);
+                    handleCropUpdate(updates);
                   }}
                   className="w-full bg-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   min="1"

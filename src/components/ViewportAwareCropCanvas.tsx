@@ -14,6 +14,7 @@ interface ViewportAwareCropCanvasProps {
   onImageTransform: (transform: { scale: number; offset: { x: number; y: number } }) => void;
   onCanvasResize: (size: { width: number; height: number }) => void;
   onCropDoubleClick: (cropId: string) => void;
+  onUpdateGridCrops: (gridId: string, updates: Partial<CropArea>) => void;
 }
 
 interface ViewportConstraints {
@@ -37,7 +38,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   imageOffset,
   onImageTransform,
   onCanvasResize,
-  onCropDoubleClick
+  onCropDoubleClick,
+  onUpdateGridCrops
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -282,9 +284,45 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       }
     }
 
-    // Draw crop areas with viewport awareness
+    // Group crops by grid for visual consistency
+    const gridGroups = new Map<string, CropArea[]>();
+    const individualCrops: CropArea[] = [];
+    
     cropAreas.forEach(crop => {
+      if (crop.gridId) {
+        if (!gridGroups.has(crop.gridId)) {
+          gridGroups.set(crop.gridId, []);
+        }
+        gridGroups.get(crop.gridId)!.push(crop);
+      } else {
+        individualCrops.push(crop);
+      }
+    });
+
+    // Draw grid connections first (behind crops)
+    gridGroups.forEach((gridCrops, gridId) => {
+      if (gridCrops.length > 1) {
+        ctx.strokeStyle = 'rgba(147, 51, 234, 0.3)'; // Purple connection lines
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        
+        // Draw grid outline
+        const minX = Math.min(...gridCrops.map(c => c.x));
+        const minY = Math.min(...gridCrops.map(c => c.y));
+        const maxX = Math.max(...gridCrops.map(c => c.x + c.width));
+        const maxY = Math.max(...gridCrops.map(c => c.y + c.height));
+        
+        ctx.strokeRect(minX - 5, minY - 5, maxX - minX + 10, maxY - minY + 10);
+        ctx.setLineDash([]);
+      }
+    });
+
+    // Draw crop areas with grid awareness
+    const allCrops = [...individualCrops, ...Array.from(gridGroups.values()).flat()];
+    
+    allCrops.forEach(crop => {
       const isSelected = crop.id === selectedCropId;
+      const isGridCrop = !!crop.gridId;
       const rotation = crop.rotation || 0;
       
       // Check if crop is within viewport
@@ -310,15 +348,36 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.translate(-centerX, -centerY);
       
-      // Draw crop rectangle with viewport awareness
-      ctx.strokeStyle = isSelected ? '#3B82F6' : (isInViewport ? '#10B981' : '#EF4444');
+      // Draw crop rectangle with grid and viewport awareness
+      let strokeColor = '#10B981'; // Default green
+      if (isSelected) {
+        strokeColor = '#3B82F6'; // Blue for selected
+      } else if (isGridCrop) {
+        strokeColor = '#9333EA'; // Purple for grid crops
+      } else if (!isInViewport) {
+        strokeColor = '#EF4444'; // Red for out of viewport
+      }
+      
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = isSelected ? 3 : 2;
       ctx.setLineDash(isSelected ? [] : (isInViewport ? [5, 5] : [10, 5]));
       ctx.strokeRect(crop.x, crop.y, crop.width, crop.height);
 
-      // Draw overlay with different opacity based on viewport status
-      const overlayOpacity = isInViewport ? (isSelected ? 0.1 : 0.05) : 0.15;
-      const overlayColor = isInViewport ? '59, 130, 246' : '239, 68, 68';
+      // Draw overlay with different opacity based on status
+      let overlayOpacity = 0.05;
+      let overlayColor = '16, 185, 129'; // Green
+      
+      if (isSelected) {
+        overlayOpacity = 0.1;
+        overlayColor = '59, 130, 246'; // Blue
+      } else if (isGridCrop) {
+        overlayOpacity = 0.08;
+        overlayColor = '147, 51, 234'; // Purple
+      } else if (!isInViewport) {
+        overlayOpacity = 0.15;
+        overlayColor = '239, 68, 68'; // Red
+      }
+      
       ctx.fillStyle = `rgba(${overlayColor}, ${overlayOpacity})`;
       ctx.fillRect(crop.x, crop.y, crop.width, crop.height);
 
@@ -328,7 +387,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Draw resize handles and rotation handle for selected crop (only if in viewport)
       if (isSelected && isInViewport) {
         const handleSize = 10;
-        ctx.fillStyle = '#3B82F6';
+        ctx.fillStyle = isGridCrop ? '#9333EA' : '#3B82F6';
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
         ctx.setLineDash([]);
@@ -386,7 +445,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         
         if (rotHandleInViewport) {
           // Draw line from crop to rotation handle
-          ctx.strokeStyle = '#3B82F6';
+          ctx.strokeStyle = isGridCrop ? '#9333EA' : '#3B82F6';
           ctx.lineWidth = 2;
           ctx.setLineDash([3, 3]);
           const topCenter = rotatePoint(crop.x + crop.width/2, crop.y);
@@ -421,7 +480,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         }
       }
 
-      // Draw label with background (always horizontal) with viewport awareness
+      // Draw label with background (always horizontal) with grid and viewport awareness
       if (crop.name) {
         ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
         const textWidth = ctx.measureText(crop.name).width;
@@ -437,8 +496,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           labelY > viewportConstraints.minY - canvasRect.top;
         
         if (labelInViewport) {
-          // Label background
-          ctx.fillStyle = isSelected ? '#3B82F6' : (isInViewport ? '#10B981' : '#EF4444');
+          // Label background with appropriate color
+          let labelColor = '#10B981'; // Green
+          if (isSelected) {
+            labelColor = '#3B82F6'; // Blue
+          } else if (isGridCrop) {
+            labelColor = '#9333EA'; // Purple
+          } else if (!isInViewport) {
+            labelColor = '#EF4444'; // Red
+          }
+          
+          ctx.fillStyle = labelColor;
           ctx.fillRect(crop.x, labelY, textWidth + padding * 2, 24);
           
           // Label text
@@ -714,7 +782,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Normalize angle to 0-360 range
       newRotation = ((newRotation % 360) + 360) % 360;
       
-      onCropUpdate(crop.id, { rotation: newRotation });
+      // Update crop or grid
+      if (crop.gridId) {
+        onUpdateGridCrops(crop.gridId, { rotation: newRotation });
+      } else {
+        onCropUpdate(crop.id, { rotation: newRotation });
+      }
       
       // Update the start angle for the next movement
       setRotating({ ...rotating, startAngle: currentAngle });
@@ -789,7 +862,15 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       newCrop = adjustCropSizeForViewport(newCrop, newCrop.width, newCrop.height);
       newCrop = constrainCropToViewport(newCrop);
 
-      onCropUpdate(crop.id, newCrop);
+      // Update crop or grid
+      if (crop.gridId) {
+        onUpdateGridCrops(crop.gridId, {
+          width: newCrop.width,
+          height: newCrop.height
+        });
+      } else {
+        onCropUpdate(crop.id, newCrop);
+      }
     } else if (isDragging && selectedCropId) {
       const crop = cropAreas.find(c => c.id === selectedCropId);
       if (crop) {
@@ -804,6 +885,23 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
         // Apply viewport constraints
         newCrop = constrainCropToViewport(newCrop);
+        
+        // For grid crops, move the entire grid
+        if (crop.gridId) {
+          const gridCrops = cropAreas.filter(c => c.gridId === crop.gridId);
+          const actualDeltaX = newCrop.x - crop.x;
+          const actualDeltaY = newCrop.y - crop.y;
+          
+          gridCrops.forEach(gridCrop => {
+            if (gridCrop.id !== crop.id) {
+              const updatedGridCrop = {
+                x: gridCrop.x + actualDeltaX,
+                y: gridCrop.y + actualDeltaY
+              };
+              onCropUpdate(gridCrop.id, constrainCropToViewport({ ...gridCrop, ...updatedGridCrop }));
+            }
+          });
+        }
         
         onCropUpdate(crop.id, newCrop);
         setDragStart(pos);
@@ -929,16 +1027,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         style={{ cursor: 'grab' }}
       />
       
-      {/* Viewport Status Indicator */}
-      <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-64">
+      {/* Enhanced Viewport Status Indicator */}
+      <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-72">
         <div className="space-y-1">
-          <div className="font-semibold text-white">Viewport-Aware Cropping</div>
-          <div>🔒 <strong>Auto-constrained:</strong> Crops stay in viewport</div>
-          <div>📏 <strong>Smart resize:</strong> Prevents overflow</div>
-          <div>🎯 <strong>Visual feedback:</strong> Red = out of bounds</div>
-          <div>⚡ <strong>Auto-adjust:</strong> On window resize</div>
+          <div className="font-semibold text-white">Uniform Grid Cropping</div>
+          <div>🔗 <strong>Grid sync:</strong> Purple crops update together</div>
+          <div>📐 <strong>Perfect alignment:</strong> No gaps between crops</div>
+          <div>🎯 <strong>Synchronized editing:</strong> Size, rotation, aspect ratio</div>
+          <div>🔓 <strong>Unlink:</strong> Break individual crops from grid</div>
+          <div>🔒 <strong>Viewport constrained:</strong> Stays in bounds</div>
           <div className="text-xs text-gray-400 mt-2">
-            Viewport: {viewportConstraints.viewportWidth} × {viewportConstraints.viewportHeight}
+            Colors: Blue=Selected, Purple=Grid, Green=Individual, Red=Out of bounds
           </div>
         </div>
       </div>
@@ -946,14 +1045,14 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       {cropAreas.length === 0 && !isCreatingCrop && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
-            <h3 className="text-xl font-semibold text-white mb-3">Viewport-Aware Cropping!</h3>
-            <p className="text-gray-300 mb-2">Create crops that automatically stay within screen boundaries</p>
+            <h3 className="text-xl font-semibold text-white mb-3">Uniform Grid Cropping!</h3>
+            <p className="text-gray-300 mb-2">Create perfect grids with synchronized editing</p>
             <p className="text-sm text-gray-400">
-              • Crops auto-constrain to viewport<br/>
-              • Smart resizing prevents overflow<br/>
-              • Visual indicators for boundaries<br/>
-              • Auto-adjusts on window resize<br/>
-              • Red highlights show out-of-bounds areas
+              • <strong>Add Uniform Grid:</strong> Creates perfectly aligned crops<br/>
+              • <strong>Synchronized editing:</strong> Changes apply to all grid crops<br/>
+              • <strong>Perfect alignment:</strong> No gaps, consistent spacing<br/>
+              • <strong>Individual control:</strong> Unlink crops when needed<br/>
+              • <strong>Visual indicators:</strong> Purple for grids, blue for selected
             </p>
           </div>
         </div>
