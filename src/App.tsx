@@ -11,6 +11,7 @@ export interface CropArea {
   height: number;
   aspectRatio?: number;
   name: string;
+  rotation?: number; // Add rotation property
 }
 
 function App() {

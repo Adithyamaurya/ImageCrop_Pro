@@ -66,6 +66,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
         width: 200,
         height: 200,
         aspectRatio: 1,
+        rotation: 0,
         name: `Crop ${cropAreas.length + 1}`
       };
     }
@@ -78,7 +79,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     const sourceCrop = cropAreas.find(crop => crop.id === sourceCropId);
     if (!sourceCrop) return;
 
-    // Create a new crop with the same dimensions and aspect ratio but different position
+    // Create a new crop with the same dimensions, aspect ratio, and rotation but different position
     const offset = 30; // Offset to avoid overlapping
     const newCrop: CropArea = {
       id: `crop-${Date.now()}`,
@@ -87,6 +88,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       width: sourceCrop.width,
       height: sourceCrop.height,
       aspectRatio: sourceCrop.aspectRatio,
+      rotation: sourceCrop.rotation || 0,
       name: `${sourceCrop.name} Copy`
     };
 

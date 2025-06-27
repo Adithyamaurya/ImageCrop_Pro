@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface CropControlsProps {
@@ -70,6 +70,12 @@ export const CropControls: React.FC<CropControlsProps> = ({
       saveRename(cropId);
     } else if (e.key === 'Escape') {
       cancelRename();
+    }
+  };
+
+  const resetRotation = () => {
+    if (selectedCrop) {
+      onUpdateCrop(selectedCrop.id, { rotation: 0 });
     }
   };
 
@@ -176,6 +182,11 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 {editingName !== crop.id && (
                   <div className="text-xs text-gray-400 mt-1">
                     {Math.round(crop.width)} × {Math.round(crop.height)}
+                    {crop.rotation && crop.rotation !== 0 && (
+                      <span className="ml-2 text-orange-400">
+                        ↻ {Math.round(crop.rotation)}°
+                      </span>
+                    )}
                     {crop.aspectRatio && crop.aspectRatio > 0 && (
                       <span className="ml-2 text-blue-400">
                         ({crop.aspectRatio === 1 ? '1:1' : 
@@ -219,6 +230,32 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   title="Quick rename"
                 >
                   <Edit3 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Rotation Control */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-2">Rotation</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="360"
+                  step="1"
+                  value={selectedCrop.rotation || 0}
+                  onChange={(e) => onUpdateCrop(selectedCrop.id, { rotation: parseFloat(e.target.value) })}
+                  className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-xs text-gray-300 w-12 text-right">
+                  {Math.round(selectedCrop.rotation || 0)}°
+                </span>
+                <button
+                  onClick={resetRotation}
+                  className="text-orange-400 hover:text-orange-300 p-1 rounded transition-colors"
+                  title="Reset rotation"
+                >
+                  <RotateCw className="h-4 w-4" />
                 </button>
               </div>
             </div>

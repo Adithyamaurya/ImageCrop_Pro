@@ -36,19 +36,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         return;
       }
 
-      // Calculate the actual crop coordinates relative to the original image
-      // Convert canvas coordinates back to image coordinates
-      const imageX = (crop.x - imageOffset.x) / imageScale;
-      const imageY = (crop.y - imageOffset.y) / imageScale;
-      const imageWidth = crop.width / imageScale;
-      const imageHeight = crop.height / imageScale;
-
-      // Ensure crop is within image bounds
-      const cropX = Math.max(0, Math.min(imageX, originalImage.width));
-      const cropY = Math.max(0, Math.min(imageY, originalImage.height));
-      const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
-      const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
-
+      // Set canvas size to crop dimensions
       canvas.width = crop.width;
       canvas.height = crop.height;
 
@@ -56,10 +44,29 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Calculate scaling to maintain aspect ratio
-      const scaleX = crop.width / cropWidth;
-      const scaleY = crop.height / cropHeight;
+      // Calculate the actual crop coordinates relative to the original image
+      // Convert canvas coordinates back to image coordinates
+      const imageX = (crop.x - imageOffset.x) / imageScale;
+      const imageY = (crop.y - imageOffset.y) / imageScale;
+      const imageWidth = crop.width / imageScale;
+      const imageHeight = crop.height / imageScale;
 
+      // Apply rotation if present
+      const rotation = crop.rotation || 0;
+      if (rotation !== 0) {
+        // Move to center of canvas for rotation
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+      }
+
+      // Ensure crop is within image bounds
+      const cropX = Math.max(0, Math.min(imageX, originalImage.width));
+      const cropY = Math.max(0, Math.min(imageY, originalImage.height));
+      const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
+      const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
+
+      // Draw the cropped portion of the image
       ctx.drawImage(
         originalImage,
         cropX,
@@ -234,6 +241,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
                     <p className="text-sm text-white truncate">{crop.name}</p>
                     <p className="text-xs text-gray-400">
                       {Math.round(crop.width)} × {Math.round(crop.height)}
+                      {crop.rotation && crop.rotation !== 0 && (
+                        <span className="ml-2 text-orange-400">
+                          ↻ {Math.round(crop.rotation)}°
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
