@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CropCanvas } from './CropCanvas';
+import { ViewportAwareCropCanvas } from './ViewportAwareCropCanvas';
 import { CropControls } from './CropControls';
 import { ExportPanel } from './ExportPanel';
 import { AdvancedCropEditor } from './AdvancedCropEditor';
@@ -58,14 +58,14 @@ export const CropEditor: React.FC<CropEditorProps> = ({
         id: `crop-${Date.now()}`
       };
     } else {
-      // Create default crop in center
-      const centerX = canvasSize.width / 2 - 100;
-      const centerY = canvasSize.height / 2 - 100;
+      // Create default crop in center, ensuring it stays within viewport
+      const centerX = Math.max(100, Math.min(canvasSize.width / 2 - 100, canvasSize.width - 300));
+      const centerY = Math.max(100, Math.min(canvasSize.height / 2 - 100, canvasSize.height - 300));
       
       newCrop = {
         id: `crop-${Date.now()}`,
-        x: Math.max(50, centerX),
-        y: Math.max(50, centerY),
+        x: centerX,
+        y: centerY,
         width: 200,
         height: 200,
         aspectRatio: 1,
@@ -84,10 +84,15 @@ export const CropEditor: React.FC<CropEditorProps> = ({
 
     // Create a new crop with the same dimensions, aspect ratio, and rotation but different position
     const offset = 30; // Offset to avoid overlapping
+    
+    // Ensure the copied crop stays within reasonable bounds
+    const newX = Math.min(sourceCrop.x + offset, canvasSize.width - sourceCrop.width - 50);
+    const newY = Math.min(sourceCrop.y + offset, canvasSize.height - sourceCrop.height - 50);
+    
     const newCrop: CropArea = {
       id: `crop-${Date.now()}`,
-      x: sourceCrop.x + offset,
-      y: sourceCrop.y + offset,
+      x: Math.max(50, newX),
+      y: Math.max(50, newY),
       width: sourceCrop.width,
       height: sourceCrop.height,
       aspectRatio: sourceCrop.aspectRatio,
@@ -157,7 +162,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
 
         {/* Main Canvas Area */}
         <div className="flex-1 bg-gray-800 relative overflow-hidden">
-          <CropCanvas
+          <ViewportAwareCropCanvas
             imageUrl={imageUrl}
             originalImage={originalImage}
             cropAreas={cropAreas}
