@@ -78,6 +78,48 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     setSelectedCropId(newCrop.id);
   };
 
+  const addMultipleCrops = (rows: number, cols: number, startX: number, startY: number) => {
+    const newCrops: CropArea[] = [];
+    const cropWidth = 150; // Standard crop width
+    const cropHeight = 150; // Standard crop height
+    
+    // Calculate total grid dimensions
+    const totalGridWidth = cols * cropWidth;
+    const totalGridHeight = rows * cropHeight;
+    
+    // Adjust starting position if grid would extend beyond canvas
+    const adjustedStartX = Math.min(startX, Math.max(50, canvasSize.width - totalGridWidth - 50));
+    const adjustedStartY = Math.min(startY, Math.max(50, canvasSize.height - totalGridHeight - 50));
+    
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const cropX = adjustedStartX + (col * cropWidth);
+        const cropY = adjustedStartY + (row * cropHeight);
+        
+        const newCrop: CropArea = {
+          id: `grid-crop-${Date.now()}-${row}-${col}`,
+          x: cropX,
+          y: cropY,
+          width: cropWidth,
+          height: cropHeight,
+          aspectRatio: 1, // Square crops by default
+          rotation: 0,
+          name: `Grid_R${rows}C${cols}_${row + 1}_${col + 1}`
+        };
+        
+        newCrops.push(newCrop);
+      }
+    }
+    
+    // Add all crops at once
+    setCropAreas(prev => [...prev, ...newCrops]);
+    
+    // Select the first crop in the grid
+    if (newCrops.length > 0) {
+      setSelectedCropId(newCrops[0].id);
+    }
+  };
+
   const copyCropStyle = (sourceCropId: string) => {
     const sourceCrop = cropAreas.find(crop => crop.id === sourceCropId);
     if (!sourceCrop) return;
@@ -157,6 +199,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onDeleteCrop={deleteCropArea}
             onSelectCrop={setSelectedCropId}
             onCopyCropStyle={copyCropStyle}
+            onAddMultipleCrops={addMultipleCrops}
           />
         </div>
 
