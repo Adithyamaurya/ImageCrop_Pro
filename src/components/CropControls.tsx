@@ -170,7 +170,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
   const gridInfo = selectedCrop ? getGridInfo(selectedCrop) : null;
 
   return (
-    <div className="p-4 space-y-6 flex-1 overflow-y-auto scrollbar-thin scroll-smooth-custom">
+    <div className="p-4 space-y-6 flex-1 overflow-y-auto">
       {/* Add Crop Buttons */}
       <div className="space-y-3">
         <button
@@ -193,8 +193,8 @@ export const CropControls: React.FC<CropControlsProps> = ({
       {/* Multiple Crops Dialog */}
       {showMultipleDialog && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-            <div className="p-6 flex-shrink-0">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-white flex items-center">
                   <Grid3X3 className="h-5 w-5 mr-2" />
@@ -207,10 +207,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   <X className="h-5 w-5" />
                 </button>
               </div>
-            </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth-custom px-6">
               <div className="space-y-4">
                 {/* Grid Dimensions */}
                 <div className="grid grid-cols-2 gap-4">
@@ -348,11 +345,8 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Fixed Bottom Actions */}
-            <div className="flex-shrink-0 p-6 border-t border-gray-700">
-              <div className="flex space-x-3">
+              <div className="flex space-x-3 mt-6">
                 <button
                   onClick={() => setShowMultipleDialog(false)}
                   className="flex-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg py-2 px-4 transition-colors"
@@ -381,7 +375,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
         {cropAreas.length === 0 ? (
           <p className="text-xs text-gray-500 text-center py-4">No crop areas created yet</p>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin scroll-smooth-custom">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
             {cropAreas.map((crop) => (
               <div
                 key={crop.id}
