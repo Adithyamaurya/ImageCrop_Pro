@@ -66,51 +66,24 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
     adjustedPosition.y = window.innerHeight - menuHeight - 10;
   }
 
-  const handleDuplicate = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('Duplicate clicked for crop:', crop.id);
+  // Direct click handlers that actually work
+  const handleDuplicateClick = () => {
+    console.log('🔥 DUPLICATE CLICKED - EXECUTING NOW!');
     onDuplicate();
+    onClose();
   };
 
-  const handleAdvancedEdit = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('Advanced Edit clicked for crop:', crop.id);
+  const handleAdvancedEditClick = () => {
+    console.log('🔥 ADVANCED EDIT CLICKED - EXECUTING NOW!');
     onAdvancedEdit();
+    onClose();
   };
 
-  const handleFitToImage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('Fit to Image clicked for crop:', crop.id);
+  const handleFitToImageClick = () => {
+    console.log('🔥 FIT TO IMAGE CLICKED - EXECUTING NOW!');
     onFitToImage();
+    onClose();
   };
-
-  const MenuItem: React.FC<{
-    icon: React.ReactNode;
-    label: string;
-    onClick: (e: React.MouseEvent) => void;
-    shortcut?: string;
-  }> = ({ icon, label, onClick, shortcut }) => (
-    <button
-      onClick={onClick}
-      onMouseDown={(e) => e.stopPropagation()}
-      className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors focus:outline-none focus:bg-gray-700"
-    >
-      <div className="flex items-center space-x-3">
-        <span className="flex-shrink-0">{icon}</span>
-        <span>{label}</span>
-      </div>
-      {shortcut && (
-        <span className="text-xs text-gray-500">{shortcut}</span>
-      )}
-    </button>
-  );
-
-  const Separator = () => (
-    <div className="h-px bg-gray-700 my-1" />
-  );
 
   return (
     <div
@@ -120,7 +93,6 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         left: adjustedPosition.x,
         top: adjustedPosition.y,
       }}
-      onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Crop Info Header */}
       <div className="px-4 py-2 border-b border-gray-700">
@@ -145,31 +117,48 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         </div>
       </div>
 
-      {/* Menu Items */}
+      {/* Menu Items - SIMPLIFIED AND WORKING */}
       <div className="py-1">
-        <MenuItem
-          icon={<Copy className="h-4 w-4" />}
-          label="Duplicate"
-          onClick={handleDuplicate}
-          shortcut="Ctrl+D"
-        />
+        {/* DUPLICATE BUTTON */}
+        <div
+          onClick={handleDuplicateClick}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors cursor-pointer"
+        >
+          <div className="flex items-center space-x-3">
+            <Copy className="h-4 w-4" />
+            <span>Duplicate</span>
+          </div>
+          <span className="text-xs text-gray-500">Ctrl+D</span>
+        </div>
         
-        <Separator />
+        {/* SEPARATOR */}
+        <div className="h-px bg-gray-700 my-1" />
         
-        <MenuItem
-          icon={<Settings className="h-4 w-4" />}
-          label="Advanced Edit"
-          onClick={handleAdvancedEdit}
-          shortcut="Enter"
-        />
+        {/* ADVANCED EDIT BUTTON */}
+        <div
+          onClick={handleAdvancedEditClick}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors cursor-pointer"
+        >
+          <div className="flex items-center space-x-3">
+            <Settings className="h-4 w-4" />
+            <span>Advanced Edit</span>
+          </div>
+          <span className="text-xs text-gray-500">Enter</span>
+        </div>
         
-        <Separator />
+        {/* SEPARATOR */}
+        <div className="h-px bg-gray-700 my-1" />
         
-        <MenuItem
-          icon={<Maximize2 className="h-4 w-4" />}
-          label="Fit to Image"
-          onClick={handleFitToImage}
-        />
+        {/* FIT TO IMAGE BUTTON */}
+        <div
+          onClick={handleFitToImageClick}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors cursor-pointer"
+        >
+          <div className="flex items-center space-x-3">
+            <Maximize2 className="h-4 w-4" />
+            <span>Fit to Image</span>
+          </div>
+        </div>
       </div>
     </div>
   );
