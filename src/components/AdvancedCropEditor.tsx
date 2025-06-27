@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Settings, Play, Pause, SkipBack, SkipForward, RotateCw, Download, Eye, EyeOff } from 'lucide-react';
+import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface AdvancedCropEditorProps {
@@ -10,6 +10,8 @@ interface AdvancedCropEditorProps {
   onUpdateCrop: (updates: Partial<CropArea>) => void;
   imageScale: number;
   imageOffset: { x: number; y: number };
+  allCrops: CropArea[];
+  onSwitchCrop: (cropId: string) => void;
 }
 
 export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
@@ -19,16 +21,19 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   originalImage,
   onUpdateCrop,
   imageScale,
-  imageOffset
+  imageOffset,
+  allCrops,
+  onSwitchCrop
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
   const [exportQuality, setExportQuality] = useState(0.9);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
-  const [totalFrames] = useState(100); // For timeline simulation
+
+  const currentCropIndex = allCrops.findIndex(c => c.id === crop.id);
+  const canGoPrevious = currentCropIndex > 0;
+  const canGoNext = currentCropIndex < allCrops.length - 1;
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -137,12 +142,18 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     document.body.removeChild(link);
   };
 
-  const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
+  const goToPreviousCrop = () => {
+    if (canGoPrevious) {
+      const previousCrop = allCrops[currentCropIndex - 1];
+      onSwitchCrop(previousCrop.id);
+    }
   };
 
-  const handleFrameChange = (frame: number) => {
-    setCurrentFrame(frame);
+  const goToNextCrop = () => {
+    if (canGoNext) {
+      const nextCrop = allCrops[currentCropIndex + 1];
+      onSwitchCrop(nextCrop.id);
+    }
   };
 
   if (!isOpen) return null;
@@ -152,7 +163,12 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Advanced Editor</h2>
+          <div className="flex items-center space-x-4">
+            <h2 className="text-xl font-bold text-white">Advanced Editor</h2>
+            <div className="text-sm text-gray-400">
+              Crop {currentCropIndex + 1} of {allCrops.length}
+            </div>
+          </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowGrid(!showGrid)}
@@ -200,62 +216,61 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </div>
             </div>
 
-            {/* Timeline Controls */}
+            {/* Crop Navigation Controls */}
             <div className="bg-gray-900 p-4 border-t border-gray-700">
-              <div className="flex items-center space-x-4">
-                {/* Playback Controls */}
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-between">
+                {/* Crop Navigation */}
+                <div className="flex items-center space-x-4">
                   <button
-                    onClick={() => handleFrameChange(0)}
-                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-                    title="Go to start"
+                    onClick={goToPreviousCrop}
+                    disabled={!canGoPrevious}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                      canGoPrevious 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                    title="Previous crop"
                   >
-                    <SkipBack className="h-4 w-4 text-white" />
+                    <ChevronLeft className="h-4 w-4" />
+                    <span>Previous</span>
                   </button>
+                  
+                  <div className="text-center">
+                    <div className="text-white font-medium">{crop.name}</div>
+                    <div className="text-xs text-gray-400">
+                      {currentCropIndex + 1} of {allCrops.length}
+                    </div>
+                  </div>
+                  
                   <button
-                    onClick={togglePlayback}
-                    className="p-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                    title={isPlaying ? "Pause" : "Play"}
+                    onClick={goToNextCrop}
+                    disabled={!canGoNext}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                      canGoNext 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                    title="Next crop"
                   >
-                    {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+                    <span>Next</span>
+                    <ChevronRight className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => handleFrameChange(totalFrames - 1)}
-                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-                    title="Go to end"
-                  >
-                    <SkipForward className="h-4 w-4 text-white" />
-                  </button>
-                </div>
-
-                {/* Timeline Slider */}
-                <div className="flex-1 flex items-center space-x-2">
-                  <span className="text-xs text-gray-400 w-8">{currentFrame}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max={totalFrames - 1}
-                    value={currentFrame}
-                    onChange={(e) => handleFrameChange(parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <span className="text-xs text-gray-400 w-8">{totalFrames}</span>
                 </div>
 
                 {/* Zoom Controls */}
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => setPreviewScale(Math.max(0.25, previewScale - 0.25))}
-                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors"
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
                   >
                     -
                   </button>
-                  <span className="text-xs text-gray-300 w-12 text-center">
+                  <span className="text-sm text-gray-300 w-16 text-center">
                     {Math.round(previewScale * 100)}%
                   </span>
                   <button
                     onClick={() => setPreviewScale(Math.min(4, previewScale + 0.25))}
-                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors"
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
                   >
                     +
                   </button>

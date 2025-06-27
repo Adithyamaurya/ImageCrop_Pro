@@ -129,6 +129,14 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
   };
 
+  const handleSwitchCrop = (cropId: string) => {
+    const crop = cropAreas.find(c => c.id === cropId);
+    if (crop) {
+      setAdvancedEditingCrop(crop);
+      setSelectedCropId(cropId);
+    }
+  };
+
   const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
 
   return (
@@ -193,6 +201,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
           onUpdateCrop={handleAdvancedCropUpdate}
           imageScale={imageScale}
           imageOffset={imageOffset}
+          allCrops={cropAreas}
+          onSwitchCrop={handleSwitchCrop}
         />
       )}
     </>
