@@ -638,20 +638,23 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         <div className="flex flex-1 overflow-hidden">
           {/* Main Preview Area */}
           <div className="flex-1 bg-gray-800 flex flex-col">
-            {/* Preview Canvas */}
-            <div className="flex-1 flex items-center justify-center p-4 relative">
+            {/* Preview Canvas - WITH CUSTOM SCROLLBARS */}
+            <div className="flex-1 flex items-center justify-center p-4 relative overflow-auto scrollbar-blue scroll-smooth-custom">
               <div 
                 ref={containerRef}
-                className="relative bg-gray-700 rounded-lg p-4 shadow-lg max-w-full max-h-full overflow-auto"
+                className="relative bg-gray-700 rounded-lg p-4 shadow-lg"
+                style={{ 
+                  minWidth: 'fit-content',
+                  minHeight: 'fit-content'
+                }}
               >
                 <canvas
                   ref={canvasRef}
-                  className="max-w-full max-h-full rounded border border-gray-600"
+                  className="rounded border border-gray-600"
                   style={{ 
                     imageRendering: 'pixelated',
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    cursor: 'default'
+                    cursor: 'default',
+                    display: 'block'
                   }}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
@@ -751,7 +754,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             </div>
           </div>
 
-          {/* Right Sidebar - Settings */}
+          {/* Right Sidebar - Settings - WITH CUSTOM SCROLLBARS */}
           <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white flex items-center">
@@ -760,7 +763,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto scrollbar-thin scroll-smooth-custom p-4 space-y-6">
               {/* Output File Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -795,6 +798,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   <div>• <strong>No hover effects:</strong> Clean interaction</div>
                   <div>• <strong>Maintains aspect ratio:</strong> If locked</div>
                   <div>• <strong>Visual feedback:</strong> Only during active interaction</div>
+                  <div>• <strong>Scroll to navigate:</strong> Large previews supported</div>
                 </div>
               </div>
 
@@ -838,7 +842,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
                     <strong>Context View:</strong> Shows the full image with the crop area highlighted. 
                     Uncropped areas are displayed at 30% opacity. Drag the crop area to move it, or drag the handles to resize.
-                    No hover effects during interaction for clean, focused editing.
+                    No hover effects during interaction for clean, focused editing. Scroll to navigate large previews.
                   </div>
                 )}
               </div>
