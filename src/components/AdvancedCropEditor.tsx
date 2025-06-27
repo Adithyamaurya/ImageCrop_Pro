@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff } from 'lucide-react';
+import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff, Undo } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface AdvancedCropEditorProps {
@@ -30,6 +30,14 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const [showGrid, setShowGrid] = useState(true);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
   const [exportQuality, setExportQuality] = useState(0.9);
+  const [originalCropState, setOriginalCropState] = useState<CropArea | null>(null);
+
+  // Store the original crop state when the editor opens or when switching crops
+  useEffect(() => {
+    if (isOpen && crop) {
+      setOriginalCropState({ ...crop });
+    }
+  }, [isOpen, crop.id]); // Only reset when crop ID changes or editor opens
 
   const currentCropIndex = allCrops.findIndex(c => c.id === crop.id);
   const canGoPrevious = currentCropIndex > 0;
@@ -156,6 +164,35 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   };
 
+  const handleDiscardChanges = () => {
+    if (originalCropState) {
+      // Revert all changes back to the original state
+      onUpdateCrop({
+        name: originalCropState.name,
+        x: originalCropState.x,
+        y: originalCropState.y,
+        width: originalCropState.width,
+        height: originalCropState.height,
+        rotation: originalCropState.rotation,
+        aspectRatio: originalCropState.aspectRatio
+      });
+      
+      // Close the editor
+      onClose();
+    }
+  };
+
+  // Check if there are any changes to show the discard button state
+  const hasChanges = originalCropState && (
+    crop.name !== originalCropState.name ||
+    crop.x !== originalCropState.x ||
+    crop.y !== originalCropState.y ||
+    crop.width !== originalCropState.width ||
+    crop.height !== originalCropState.height ||
+    crop.rotation !== originalCropState.rotation ||
+    crop.aspectRatio !== originalCropState.aspectRatio
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -168,6 +205,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             <div className="text-sm text-gray-400">
               Crop {currentCropIndex + 1} of {allCrops.length}
             </div>
+            {hasChanges && (
+              <div className="text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded">
+                Modified
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -434,10 +476,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               
               <div className="flex space-x-2">
                 <button
-                  onClick={onClose}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg py-2 px-4 text-sm transition-colors"
+                  onClick={handleDiscardChanges}
+                  className={`flex-1 flex items-center justify-center space-x-2 rounded-lg py-2 px-4 text-sm transition-colors ${
+                    hasChanges 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                  title={hasChanges ? "Discard all changes and close" : "Close without changes"}
                 >
-                  Close
+                  <Undo className="h-4 w-4" />
+                  <span>Discard Changes</span>
                 </button>
                 <button
                   onClick={() => {
