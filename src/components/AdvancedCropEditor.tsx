@@ -195,8 +195,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Draw crop area border with enhanced styling for dragging
-      const borderColor = isDragging ? '#F59E0B' : (isHovering ? '#60A5FA' : '#3B82F6');
-      const borderWidth = isDragging ? 4 : (isHovering ? 3 : 2);
+      const borderColor = isDragging ? '#F59E0B' : (isHovering && !isDragging ? '#60A5FA' : '#3B82F6');
+      const borderWidth = isDragging ? 4 : (isHovering && !isDragging ? 3 : 2);
       
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
@@ -204,12 +204,12 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw crop area overlay with enhanced opacity during drag
-      const overlayOpacity = isDragging ? 0.2 : (isHovering ? 0.15 : 0.1);
+      const overlayOpacity = isDragging ? 0.2 : (isHovering && !isDragging ? 0.15 : 0.1);
       ctx.fillStyle = `rgba(59, 130, 246, ${overlayOpacity})`;
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
-      // Draw drag handles when hovering or dragging
-      if (isHovering || isDragging) {
+      // Draw drag handles when hovering or dragging (but not during active drag)
+      if ((isHovering && !isDragging) || isDragging) {
         const handleSize = 8;
         const handleColor = isDragging ? '#F59E0B' : '#3B82F6';
         
@@ -283,8 +283,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Add subtle border for crop-only mode
-      if (isHovering || isDragging) {
+      // Add subtle border for crop-only mode (only when not dragging)
+      if ((isHovering && !isDragging) || isDragging) {
         ctx.strokeStyle = isDragging ? '#F59E0B' : '#3B82F6';
         ctx.lineWidth = isDragging ? 3 : 2;
         ctx.setLineDash(isDragging ? [6, 3] : []);
@@ -376,6 +376,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       setDragOffset({ x: 0, y: 0 });
       setOriginalPosition({ x: crop.x, y: crop.y });
       setDragAnimation(true);
+      setIsHovering(false); // Disable hover during drag
       
       // Add drag cursor
       const canvas = canvasRef.current;
@@ -419,14 +420,14 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       });
       
     } else {
-      // Handle hover state
+      // Handle hover state only when not dragging
       const wasHovering = isHovering;
       const nowHovering = isPointInCrop(pos.x, pos.y);
       
       if (nowHovering !== wasHovering) {
         setIsHovering(nowHovering);
         
-        // Update cursor
+        // Update cursor only when not dragging
         if (canvas) {
           canvas.style.cursor = nowHovering ? 'grab' : 'default';
         }
@@ -466,11 +467,18 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     setIsDragging(false);
     setDragOffset({ x: 0, y: 0 });
     
-    // Reset cursor
+    // Reset cursor and re-enable hover detection
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.style.cursor = isHovering ? 'grab' : 'default';
+      canvas.style.cursor = 'default';
     }
+    
+    // Re-enable hover detection after a brief delay
+    setTimeout(() => {
+      if (!isDragging) {
+        setIsHovering(false);
+      }
+    }, 50);
   };
 
   const handleMouseLeave = () => {
@@ -622,13 +630,13 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 <canvas
                   ref={canvasRef}
                   className={`max-w-full max-h-full rounded border border-gray-600 transition-all duration-150 ${
-                    isDragging ? 'border-orange-400 shadow-lg' : isHovering ? 'border-blue-400' : ''
+                    isDragging ? 'border-orange-400 shadow-lg' : (isHovering && !isDragging ? 'border-blue-400' : '')
                   }`}
                   style={{ 
                     imageRendering: 'pixelated',
                     maxWidth: '100%',
                     maxHeight: '100%',
-                    cursor: isDragging ? 'grabbing' : (isHovering ? 'grab' : 'default')
+                    cursor: isDragging ? 'grabbing' : (isHovering && !isDragging ? 'grab' : 'default')
                   }}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
@@ -656,8 +664,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   {showUncropped ? 'Context View' : 'Crop Only'}
                 </div>
 
-                {/* Drag Instructions */}
-                {showUncropped && !isDragging && (
+                {/* Drag Instructions - Only show when not dragging */}
+                {showUncropped && !isDragging && !isHovering && (
                   <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
                     Click and drag the crop area to move it
                   </div>
@@ -767,6 +775,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 <h4 className="text-sm font-semibold text-gray-300 mb-2">Drag Controls</h4>
                 <div className="text-xs text-gray-400 space-y-1">
                   <div>• Click and drag crop area to move</div>
+                  <div>• Canvas stays stationary during drag</div>
                   <div>• Maintains aspect ratio if locked</div>
                   <div>• Auto-constrains to image bounds</div>
                   <div>• Returns to original if dragged outside</div>
