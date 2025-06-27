@@ -717,10 +717,13 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     const pos = getMousePos(e);
     const cropAtPos = getCropAt(pos.x, pos.y);
     
     if (cropAtPos) {
+      console.log('Context menu for crop:', cropAtPos.id, cropAtPos.name);
       setContextMenu({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
@@ -728,39 +731,58 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       });
       onCropSelect(cropAtPos.id);
     } else {
-      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, cropId: null });
+      closeContextMenu();
     }
   };
 
   const closeContextMenu = () => {
+    console.log('Closing context menu');
     setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, cropId: null });
   };
 
   // Context menu action handlers
   const handleCropDuplicate = () => {
-    if (!contextMenu.cropId) return;
+    console.log('Duplicate handler called');
+    if (!contextMenu.cropId) {
+      console.log('No crop ID in context menu');
+      return;
+    }
     
     const crop = cropAreas.find(c => c.id === contextMenu.cropId);
-    if (!crop) return;
+    if (!crop) {
+      console.log('Crop not found:', contextMenu.cropId);
+      return;
+    }
     
-    // Use the onCropCopy handler which should create a duplicate
+    console.log('Duplicating crop:', crop.name);
     onCropCopy(crop.id);
-    closeContextMenu();
   };
 
   const handleAdvancedEdit = () => {
-    if (!contextMenu.cropId) return;
+    console.log('Advanced edit handler called');
+    if (!contextMenu.cropId) {
+      console.log('No crop ID in context menu');
+      return;
+    }
     
+    console.log('Opening advanced edit for crop:', contextMenu.cropId);
     onCropDoubleClick(contextMenu.cropId);
-    closeContextMenu();
   };
 
   const handleFitToImage = () => {
-    if (!contextMenu.cropId || !originalImage) return;
+    console.log('Fit to image handler called');
+    if (!contextMenu.cropId || !originalImage) {
+      console.log('No crop ID or original image');
+      return;
+    }
     
     const crop = cropAreas.find(c => c.id === contextMenu.cropId);
-    if (!crop) return;
+    if (!crop) {
+      console.log('Crop not found:', contextMenu.cropId);
+      return;
+    }
     
+    console.log('Fitting crop to image:', crop.name);
     const updates = {
       x: imageOffset.x,
       y: imageOffset.y,
@@ -774,7 +796,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     } else {
       onCropUpdate(crop.id, updates);
     }
-    closeContextMenu();
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {

@@ -56,7 +56,7 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
   // Adjust menu position to stay within viewport
   const adjustedPosition = { ...position };
   const menuWidth = 200;
-  const menuHeight = 160; // Reduced height since we removed rename
+  const menuHeight = 160;
   
   if (position.x + menuWidth > window.innerWidth) {
     adjustedPosition.x = window.innerWidth - menuWidth - 10;
@@ -66,18 +66,37 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
     adjustedPosition.y = window.innerHeight - menuHeight - 10;
   }
 
+  const handleDuplicate = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Duplicate clicked for crop:', crop.id);
+    onDuplicate();
+  };
+
+  const handleAdvancedEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Advanced Edit clicked for crop:', crop.id);
+    onAdvancedEdit();
+  };
+
+  const handleFitToImage = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Fit to Image clicked for crop:', crop.id);
+    onFitToImage();
+  };
+
   const MenuItem: React.FC<{
     icon: React.ReactNode;
     label: string;
-    onClick: () => void;
+    onClick: (e: React.MouseEvent) => void;
     shortcut?: string;
   }> = ({ icon, label, onClick, shortcut }) => (
     <button
-      onClick={() => {
-        onClick();
-        onClose();
-      }}
-      className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors focus:outline-none focus:bg-gray-700"
     >
       <div className="flex items-center space-x-3">
         <span className="flex-shrink-0">{icon}</span>
@@ -101,17 +120,26 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         left: adjustedPosition.x,
         top: adjustedPosition.y,
       }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Crop Info Header */}
       <div className="px-4 py-2 border-b border-gray-700">
         <div className="flex items-center space-x-2">
           <span className="text-sm font-medium text-white truncate">{crop.name}</span>
+          {crop.gridId && (
+            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded">Grid</span>
+          )}
         </div>
         <div className="text-xs text-gray-400 mt-1">
           {Math.round(crop.width)} × {Math.round(crop.height)}
           {crop.rotation && crop.rotation !== 0 && (
             <span className="ml-2 text-orange-400">
               ↻ {Math.round(crop.rotation)}°
+            </span>
+          )}
+          {crop.gridPosition && (
+            <span className="ml-2 text-purple-400">
+              [{crop.gridPosition.row + 1},{crop.gridPosition.col + 1}]
             </span>
           )}
         </div>
@@ -122,7 +150,7 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         <MenuItem
           icon={<Copy className="h-4 w-4" />}
           label="Duplicate"
-          onClick={onDuplicate}
+          onClick={handleDuplicate}
           shortcut="Ctrl+D"
         />
         
@@ -131,7 +159,7 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         <MenuItem
           icon={<Settings className="h-4 w-4" />}
           label="Advanced Edit"
-          onClick={onAdvancedEdit}
+          onClick={handleAdvancedEdit}
           shortcut="Enter"
         />
         
@@ -140,7 +168,7 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
         <MenuItem
           icon={<Maximize2 className="h-4 w-4" />}
           label="Fit to Image"
-          onClick={onFitToImage}
+          onClick={handleFitToImage}
         />
       </div>
     </div>
