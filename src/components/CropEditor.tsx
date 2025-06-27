@@ -23,6 +23,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [advancedEditingCrop, setAdvancedEditingCrop] = useState<CropArea | null>(null);
+  const [editingCropName, setEditingCropName] = useState<string | null>(null);
 
   // Initialize image position when image loads
   useEffect(() => {
@@ -55,7 +56,9 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       // Use provided crop data (from drag creation)
       newCrop = {
         ...cropData,
-        id: `crop-${Date.now()}`
+        id: `crop-${Date.now()}`,
+        visible: true,
+        zIndex: cropAreas.length
       };
     } else {
       // Create default crop in center, ensuring it stays within viewport
@@ -70,7 +73,9 @@ export const CropEditor: React.FC<CropEditorProps> = ({
         height: 200,
         aspectRatio: 1,
         rotation: 0,
-        name: `Crop ${cropAreas.length + 1}`
+        name: `Crop ${cropAreas.length + 1}`,
+        visible: true,
+        zIndex: cropAreas.length
       };
     }
     
@@ -78,10 +83,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     setSelectedCropId(newCrop.id);
   };
 
-  const addMultipleCrops = (rows: number, cols: number, startX: number, startY: number) => {
+  const addMultipleCrops = (rows: number, cols: number, startX: number, startY: number, cropSize: number = 150, spacing: number = 0) => {
     const newCrops: CropArea[] = [];
-    const cropSize = 150; // Standard crop size
-    const spacing = 0; // No spacing for perfect grid alignment
     
     // Generate unique grid ID
     const gridId = `grid-${Date.now()}`;
@@ -109,7 +112,9 @@ export const CropEditor: React.FC<CropEditorProps> = ({
           rotation: 0,
           name: `Grid_R${rows}C${cols}_${row + 1}_${col + 1}`,
           gridId: gridId,
-          gridPosition: { row, col }
+          gridPosition: { row, col },
+          visible: true,
+          zIndex: cropAreas.length + newCrops.length
         };
         
         newCrops.push(newCrop);
@@ -174,6 +179,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     const newX = Math.min(sourceCrop.x + offset, canvasSize.width - sourceCrop.width - 50);
     const newY = Math.min(sourceCrop.y + offset, canvasSize.height - sourceCrop.height - 50);
     
+    const maxZIndex = Math.max(...cropAreas.map(c => c.zIndex || 0));
+    
     const newCrop: CropArea = {
       id: `crop-${Date.now()}`,
       x: Math.max(50, newX),
@@ -182,7 +189,9 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       height: sourceCrop.height,
       aspectRatio: sourceCrop.aspectRatio,
       rotation: sourceCrop.rotation || 0,
-      name: `${sourceCrop.name} Copy`
+      name: `${sourceCrop.name} Copy`,
+      visible: true,
+      zIndex: maxZIndex + 1
       // Note: Don't copy gridId or gridPosition for individual copies
     };
 
@@ -232,6 +241,17 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
   };
 
+  // Context menu handlers
+  const handleCropRename = (cropId: string) => {
+    setEditingCropName(cropId);
+  };
+
+  const handleCropExport = (cropId: string) => {
+    // This would trigger export of a single crop
+    // Implementation would be similar to ExportPanel's cropImage function
+    console.log('Export crop:', cropId);
+  };
+
   const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
 
   return (
@@ -250,6 +270,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onAddMultipleCrops={addMultipleCrops}
             onUpdateGridCrops={updateGridCrops}
             onUnlinkFromGrid={unlinkFromGrid}
+            editingCropName={editingCropName}
+            onSetEditingCropName={setEditingCropName}
           />
         </div>
 
@@ -272,6 +294,11 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onCanvasResize={setCanvasSize}
             onCropDoubleClick={handleCropDoubleClick}
             onUpdateGridCrops={updateGridCrops}
+            onCropDelete={deleteCropArea}
+            onCropCopy={copyCropStyle}
+            onCropRename={handleCropRename}
+            onUnlinkFromGrid={unlinkFromGrid}
+            onCropExport={handleCropExport}
           />
         </div>
 

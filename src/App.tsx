@@ -14,6 +14,8 @@ export interface CropArea {
   rotation?: number;
   gridId?: string; // New property to identify grid membership
   gridPosition?: { row: number; col: number }; // Position within grid
+  visible?: boolean; // New property for visibility toggle
+  zIndex?: number; // New property for layer ordering
 }
 
 function App() {

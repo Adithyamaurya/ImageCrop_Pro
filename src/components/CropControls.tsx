@@ -10,9 +10,11 @@ interface CropControlsProps {
   onDeleteCrop: (id: string) => void;
   onSelectCrop: (id: string | null) => void;
   onCopyCropStyle: (cropId: string) => void;
-  onAddMultipleCrops: (rows: number, cols: number, startX: number, startY: number) => void;
+  onAddMultipleCrops: (rows: number, cols: number, startX: number, startY: number, cropSize?: number, spacing?: number) => void;
   onUpdateGridCrops: (gridId: string, updates: Partial<CropArea>) => void;
   onUnlinkFromGrid: (cropId: string) => void;
+  editingCropName: string | null;
+  onSetEditingCropName: (cropId: string | null) => void;
 }
 
 const ASPECT_RATIOS = [
@@ -34,9 +36,10 @@ export const CropControls: React.FC<CropControlsProps> = ({
   onCopyCropStyle,
   onAddMultipleCrops,
   onUpdateGridCrops,
-  onUnlinkFromGrid
+  onUnlinkFromGrid,
+  editingCropName,
+  onSetEditingCropName
 }) => {
-  const [editingName, setEditingName] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
   const [showMultipleDialog, setShowMultipleDialog] = useState(false);
   const [gridRows, setGridRows] = useState(2);
@@ -68,7 +71,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
   };
 
   const startRename = (crop: CropArea) => {
-    setEditingName(crop.id);
+    onSetEditingCropName(crop.id);
     setTempName(crop.name);
   };
 
@@ -76,12 +79,12 @@ export const CropControls: React.FC<CropControlsProps> = ({
     if (tempName.trim()) {
       onUpdateCrop(cropId, { name: tempName.trim() });
     }
-    setEditingName(null);
+    onSetEditingCropName(null);
     setTempName('');
   };
 
   const cancelRename = () => {
-    setEditingName(null);
+    onSetEditingCropName(null);
     setTempName('');
   };
 
@@ -125,7 +128,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
 
   const handleCreateMultipleCrops = () => {
     if (gridRows > 0 && gridCols > 0) {
-      onAddMultipleCrops(gridRows, gridCols, gridStartX, gridStartY);
+      onAddMultipleCrops(gridRows, gridCols, gridStartX, gridStartY, gridCropSize, gridSpacing);
       setShowMultipleDialog(false);
     }
   };
@@ -383,7 +386,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  {editingName === crop.id ? (
+                  {editingCropName === crop.id ? (
                     <div className="flex-1 flex items-center space-x-2">
                       <input
                         type="text"
@@ -471,7 +474,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     </>
                   )}
                 </div>
-                {editingName !== crop.id && (
+                {editingCropName !== crop.id && (
                   <div className="text-xs text-gray-400 mt-1">
                     {Math.round(crop.width)} × {Math.round(crop.height)}
                     {crop.rotation && crop.rotation !== 0 && (

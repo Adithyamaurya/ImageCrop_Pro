@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CropArea } from '../App';
+import { CropContextMenu } from './CropContextMenu';
 
 interface ViewportAwareCropCanvasProps {
   imageUrl: string;
@@ -15,6 +16,11 @@ interface ViewportAwareCropCanvasProps {
   onCanvasResize: (size: { width: number; height: number }) => void;
   onCropDoubleClick: (cropId: string) => void;
   onUpdateGridCrops: (gridId: string, updates: Partial<CropArea>) => void;
+  onCropDelete: (cropId: string) => void;
+  onCropCopy: (cropId: string) => void;
+  onCropRename: (cropId: string) => void;
+  onUnlinkFromGrid: (cropId: string) => void;
+  onCropExport: (cropId: string) => void;
 }
 
 interface ViewportConstraints {
@@ -39,7 +45,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   onImageTransform,
   onCanvasResize,
   onCropDoubleClick,
-  onUpdateGridCrops
+  onUpdateGridCrops,
+  onCropDelete,
+  onCropCopy,
+  onCropRename,
+  onUnlinkFromGrid,
+  onCropExport
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +73,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     maxY: 0,
     viewportWidth: 0,
     viewportHeight: 0
+  });
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    cropId: string | null;
+  }>({
+    isOpen: false,
+    position: { x: 0, y: 0 },
+    cropId: null
   });
 
   // Calculate viewport constraints
@@ -284,11 +306,16 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       }
     }
 
-    // Group crops by grid for visual consistency
+    // Group crops by grid for visual consistency and sort by zIndex
     const gridGroups = new Map<string, CropArea[]>();
     const individualCrops: CropArea[] = [];
     
-    cropAreas.forEach(crop => {
+    // Filter visible crops and sort by zIndex
+    const visibleCrops = cropAreas
+      .filter(crop => crop.visible !== false)
+      .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+    
+    visibleCrops.forEach(crop => {
       if (crop.gridId) {
         if (!gridGroups.has(crop.gridId)) {
           gridGroups.set(crop.gridId, []);
@@ -594,8 +621,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
   const getCropAt = (x: number, y: number) => {
     // Check from top to bottom (reverse order) to prioritize top crops
-    for (let i = cropAreas.length - 1; i >= 0; i--) {
-      const crop = cropAreas[i];
+    // Also consider zIndex for proper layering
+    const sortedCrops = [...cropAreas]
+      .filter(crop => crop.visible !== false)
+      .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+    
+    for (const crop of sortedCrops) {
       const rotation = crop.rotation || 0;
       
       // Transform point to crop's local coordinate system
@@ -683,7 +714,142 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     return ((degrees % 360) + 360) % 360; // Normalize to 0-360 range
   };
 
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const pos = getMousePos(e);
+    const cropAtPos = getCropAt(pos.x, pos.y);
+    
+    if (cropAtPos) {
+      setContextMenu({
+        isOpen: true,
+        position: { x: e.clientX, y: e.clientY },
+        cropId: cropAtPos.id
+      });
+      onCropSelect(cropAtPos.id);
+    } else {
+      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, cropId: null });
+    }
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, cropId: null });
+  };
+
+  // Context menu action handlers
+  const handleCropRotate = (degrees: number) => {
+    if (!contextMenu.cropId) return;
+    
+    const crop = cropAreas.find(c => c.id === contextMenu.cropId);
+    if (!crop) return;
+    
+    const newRotation = ((crop.rotation || 0) + degrees) % 360;
+    const updates = { rotation: newRotation };
+    
+    if (crop.gridId) {
+      onUpdateGridCrops(crop.gridId, updates);
+    } else {
+      onCropUpdate(crop.id, updates);
+    }
+  };
+
+  const handleCropResetRotation = () => {
+    if (!contextMenu.cropId) return;
+    
+    const crop = cropAreas.find(c => c.id === contextMenu.cropId);
+    if (!crop) return;
+    
+    const updates = { rotation: 0 };
+    
+    if (crop.gridId) {
+      onUpdateGridCrops(crop.gridId, updates);
+    } else {
+      onCropUpdate(crop.id, updates);
+    }
+  };
+
+  const handleCropDuplicate = () => {
+    if (!contextMenu.cropId) return;
+    
+    const crop = cropAreas.find(c => c.id === contextMenu.cropId);
+    if (!crop) return;
+    
+    const newCrop: Omit<CropArea, 'id'> = {
+      x: crop.x + 30,
+      y: crop.y + 30,
+      width: crop.width,
+      height: crop.height,
+      aspectRatio: crop.aspectRatio,
+      rotation: crop.rotation || 0,
+      name: `${crop.name} Copy`,
+      visible: true,
+      zIndex: (crop.zIndex || 0) + 1
+    };
+    
+    onCropAdd(newCrop);
+  };
+
+  const handleToggleVisibility = () => {
+    if (!contextMenu.cropId) return;
+    
+    const crop = cropAreas.find(c => c.id === contextMenu.cropId);
+    if (!crop) return;
+    
+    const updates = { visible: crop.visible === false };
+    
+    if (crop.gridId) {
+      onUpdateGridCrops(crop.gridId, updates);
+    } else {
+      onCropUpdate(crop.id, updates);
+    }
+  };
+
+  const handleFitToImage = () => {
+    if (!contextMenu.cropId || !originalImage) return;
+    
+    const crop = cropAreas.find(c => c.id === contextMenu.cropId);
+    if (!crop) return;
+    
+    const updates = {
+      x: imageOffset.x,
+      y: imageOffset.y,
+      width: originalImage.width * imageScale,
+      height: originalImage.height * imageScale,
+      rotation: 0
+    };
+    
+    if (crop.gridId) {
+      onUpdateGridCrops(crop.gridId, updates);
+    } else {
+      onCropUpdate(crop.id, updates);
+    }
+  };
+
+  const handleBringToFront = () => {
+    if (!contextMenu.cropId) return;
+    
+    const maxZIndex = Math.max(...cropAreas.map(c => c.zIndex || 0));
+    const updates = { zIndex: maxZIndex + 1 };
+    
+    onCropUpdate(contextMenu.cropId, updates);
+  };
+
+  const handleSendToBack = () => {
+    if (!contextMenu.cropId) return;
+    
+    const minZIndex = Math.min(...cropAreas.map(c => c.zIndex || 0));
+    const updates = { zIndex: minZIndex - 1 };
+    
+    onCropUpdate(contextMenu.cropId, updates);
+  };
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Close context menu on any click
+    if (contextMenu.isOpen) {
+      closeContextMenu();
+      return;
+    }
+
     const pos = getMousePos(e);
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
     
@@ -957,13 +1123,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
       // Only create crop if it's large enough
       if (width > 20 && height > 20) {
+        const maxZIndex = cropAreas.length > 0 ? Math.max(...cropAreas.map(c => c.zIndex || 0)) : 0;
+        
         let newCrop: Omit<CropArea, 'id'> = {
           x,
           y,
           width,
           height,
           rotation: 0,
-          name: `Crop ${cropAreas.length + 1}`
+          name: `Crop ${cropAreas.length + 1}`,
+          visible: true,
+          zIndex: maxZIndex + 1
         };
 
         // Apply viewport constraints to new crop
@@ -974,7 +1144,9 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           width: constrainedCrop.width,
           height: constrainedCrop.height,
           rotation: constrainedCrop.rotation,
-          name: constrainedCrop.name
+          name: constrainedCrop.name,
+          visible: constrainedCrop.visible,
+          zIndex: constrainedCrop.zIndex
         };
 
         onCropAdd(newCrop);
@@ -1014,6 +1186,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     setTimeout(() => adjustImageToViewport(), 100);
   };
 
+  const contextMenuCrop = contextMenu.cropId ? cropAreas.find(c => c.id === contextMenu.cropId) : null;
+
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       <canvas
@@ -1024,20 +1198,45 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
         style={{ cursor: 'grab' }}
+      />
+      
+      {/* Context Menu */}
+      <CropContextMenu
+        isOpen={contextMenu.isOpen}
+        position={contextMenu.position}
+        crop={contextMenuCrop}
+        onClose={closeContextMenu}
+        onCopy={() => contextMenu.cropId && onCropCopy(contextMenu.cropId)}
+        onDelete={() => contextMenu.cropId && onCropDelete(contextMenu.cropId)}
+        onRename={() => contextMenu.cropId && onCropRename(contextMenu.cropId)}
+        onAdvancedEdit={() => contextMenu.cropId && onCropDoubleClick(contextMenu.cropId)}
+        onRotate90={() => handleCropRotate(90)}
+        onRotate180={() => handleCropRotate(180)}
+        onRotate270={() => handleCropRotate(270)}
+        onResetRotation={handleCropResetRotation}
+        onDuplicate={handleCropDuplicate}
+        onUnlinkFromGrid={contextMenuCrop?.gridId ? () => contextMenu.cropId && onUnlinkFromGrid(contextMenu.cropId) : undefined}
+        onToggleVisibility={handleToggleVisibility}
+        onFitToImage={handleFitToImage}
+        onExportCrop={() => contextMenu.cropId && onCropExport(contextMenu.cropId)}
+        onBringToFront={handleBringToFront}
+        onSendToBack={handleSendToBack}
       />
       
       {/* Enhanced Viewport Status Indicator */}
       <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-72">
         <div className="space-y-1">
-          <div className="font-semibold text-white">Uniform Grid Cropping</div>
-          <div>🔗 <strong>Grid sync:</strong> Purple crops update together</div>
-          <div>📐 <strong>Perfect alignment:</strong> No gaps between crops</div>
-          <div>🎯 <strong>Synchronized editing:</strong> Size, rotation, aspect ratio</div>
-          <div>🔓 <strong>Unlink:</strong> Break individual crops from grid</div>
-          <div>🔒 <strong>Viewport constrained:</strong> Stays in bounds</div>
+          <div className="font-semibold text-white">Right-Click Context Menu</div>
+          <div>🖱️ <strong>Right-click crop:</strong> Show context menu</div>
+          <div>📋 <strong>Copy, duplicate:</strong> Clone crop properties</div>
+          <div>🔄 <strong>Rotate options:</strong> 90°, 180°, 270°, reset</div>
+          <div>👁️ <strong>Visibility toggle:</strong> Show/hide crops</div>
+          <div>📐 <strong>Layer control:</strong> Bring to front/back</div>
+          <div>🔗 <strong>Grid management:</strong> Unlink from grid</div>
           <div className="text-xs text-gray-400 mt-2">
-            Colors: Blue=Selected, Purple=Grid, Green=Individual, Red=Out of bounds
+            Right-click any crop for full context menu
           </div>
         </div>
       </div>
@@ -1045,14 +1244,15 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       {cropAreas.length === 0 && !isCreatingCrop && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
-            <h3 className="text-xl font-semibold text-white mb-3">Uniform Grid Cropping!</h3>
-            <p className="text-gray-300 mb-2">Create perfect grids with synchronized editing</p>
+            <h3 className="text-xl font-semibold text-white mb-3">Advanced Crop Management!</h3>
+            <p className="text-gray-300 mb-2">Create crops and right-click for powerful editing options</p>
             <p className="text-sm text-gray-400">
-              • <strong>Add Uniform Grid:</strong> Creates perfectly aligned crops<br/>
-              • <strong>Synchronized editing:</strong> Changes apply to all grid crops<br/>
-              • <strong>Perfect alignment:</strong> No gaps, consistent spacing<br/>
-              • <strong>Individual control:</strong> Unlink crops when needed<br/>
-              • <strong>Visual indicators:</strong> Purple for grids, blue for selected
+              • <strong>Right-click crops:</strong> Full context menu<br/>
+              • <strong>Copy & duplicate:</strong> Clone crop properties<br/>
+              • <strong>Rotation controls:</strong> Precise angle adjustments<br/>
+              • <strong>Visibility toggle:</strong> Show/hide individual crops<br/>
+              • <strong>Layer management:</strong> Control crop stacking order<br/>
+              • <strong>Grid operations:</strong> Unlink from synchronized grids
             </p>
           </div>
         </div>
