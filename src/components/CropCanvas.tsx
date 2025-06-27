@@ -13,6 +13,7 @@ interface CropCanvasProps {
   imageOffset: { x: number; y: number };
   onImageTransform: (transform: { scale: number; offset: { x: number; y: number } }) => void;
   onCanvasResize: (size: { width: number; height: number }) => void;
+  onCropDoubleClick: (cropId: string) => void;
 }
 
 export const CropCanvas: React.FC<CropCanvasProps> = ({
@@ -26,7 +27,8 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
   imageScale,
   imageOffset,
   onImageTransform,
-  onCanvasResize
+  onCanvasResize,
+  onCropDoubleClick
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +42,8 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
   const [isCreatingCrop, setIsCreatingCrop] = useState(false);
   const [newCropStart, setNewCropStart] = useState({ x: 0, y: 0 });
   const [newCropEnd, setNewCropEnd] = useState({ x: 0, y: 0 });
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [lastClickedCrop, setLastClickedCrop] = useState<string | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -389,12 +393,25 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
     // Check for crop selection
     const cropAtPos = getCropAt(pos.x, pos.y);
     if (cropAtPos) {
+      // Handle double-click detection
+      const currentTime = Date.now();
+      if (lastClickedCrop === cropAtPos.id && currentTime - lastClickTime < 300) {
+        // Double-click detected
+        onCropDoubleClick(cropAtPos.id);
+        return;
+      }
+      
+      setLastClickTime(currentTime);
+      setLastClickedCrop(cropAtPos.id);
+      
       onCropSelect(cropAtPos.id);
       setIsDragging(true);
       setDragStart(pos);
     } else {
       // Start creating new crop or panning
       onCropSelect(null);
+      setLastClickedCrop(null);
+      
       if (e.button === 0) { // Left mouse button
         // Check if we're over the image area to decide between creating crop or panning
         const imgWidth = originalImage ? originalImage.width * imageScale : 0;
@@ -648,7 +665,8 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
               • Drag crops to move them<br/>
               • Use rotation handle to rotate<br/>
               • Scroll to zoom<br/>
-              • Drag empty space to pan
+              • Drag empty space to pan<br/>
+              • Double-click crop for advanced editing
             </p>
           </div>
         </div>
@@ -664,6 +682,7 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
           <div>🔄 <strong>Scroll:</strong> Zoom in/out</div>
           <div>✋ <strong>Drag empty:</strong> Pan image</div>
           <div>⇧ <strong>Shift + rotate:</strong> Snap to 15°</div>
+          <div>🖱️ <strong>Double-click crop:</strong> Advanced editor</div>
         </div>
       </div>
     </div>

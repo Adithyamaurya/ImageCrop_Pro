@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CropCanvas } from './CropCanvas';
 import { CropControls } from './CropControls';
 import { ExportPanel } from './ExportPanel';
+import { AdvancedCropEditor } from './AdvancedCropEditor';
 import { CropArea } from '../App';
 
 interface CropEditorProps {
@@ -20,6 +21,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
   const [imageScale, setImageScale] = useState(1);
   const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
+  const [advancedEditingCrop, setAdvancedEditingCrop] = useState<CropArea | null>(null);
 
   // Initialize image position when image loads
   useEffect(() => {
@@ -111,53 +114,87 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
   };
 
+  const handleCropDoubleClick = (cropId: string) => {
+    const crop = cropAreas.find(c => c.id === cropId);
+    if (crop) {
+      setAdvancedEditingCrop(crop);
+      setAdvancedEditorOpen(true);
+    }
+  };
+
+  const handleAdvancedCropUpdate = (updates: Partial<CropArea>) => {
+    if (advancedEditingCrop) {
+      updateCropArea(advancedEditingCrop.id, updates);
+      setAdvancedEditingCrop(prev => prev ? { ...prev, ...updates } : null);
+    }
+  };
+
   const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
 
   return (
-    <div className="flex h-[calc(100vh-80px)]">
-      {/* Left Sidebar - Crop Tools */}
-      <div className="w-80 bg-gray-900 border-r border-gray-700 flex flex-col">
-        <CropControls
-          cropAreas={cropAreas}
-          selectedCrop={selectedCrop}
-          onAddCrop={() => addCropArea()}
-          onUpdateCrop={updateCropArea}
-          onDeleteCrop={deleteCropArea}
-          onSelectCrop={setSelectedCropId}
-          onCopyCropStyle={copyCropStyle}
-        />
+    <>
+      <div className="flex h-[calc(100vh-80px)]">
+        {/* Left Sidebar - Crop Tools */}
+        <div className="w-80 bg-gray-900 border-r border-gray-700 flex flex-col">
+          <CropControls
+            cropAreas={cropAreas}
+            selectedCrop={selectedCrop}
+            onAddCrop={() => addCropArea()}
+            onUpdateCrop={updateCropArea}
+            onDeleteCrop={deleteCropArea}
+            onSelectCrop={setSelectedCropId}
+            onCopyCropStyle={copyCropStyle}
+          />
+        </div>
+
+        {/* Main Canvas Area */}
+        <div className="flex-1 bg-gray-800 relative overflow-hidden">
+          <CropCanvas
+            imageUrl={imageUrl}
+            originalImage={originalImage}
+            cropAreas={cropAreas}
+            selectedCropId={selectedCropId}
+            onCropSelect={setSelectedCropId}
+            onCropUpdate={updateCropArea}
+            onCropAdd={addCropArea}
+            imageScale={imageScale}
+            imageOffset={imageOffset}
+            onImageTransform={({ scale, offset }) => {
+              setImageScale(scale);
+              setImageOffset(offset);
+            }}
+            onCanvasResize={setCanvasSize}
+            onCropDoubleClick={handleCropDoubleClick}
+          />
+        </div>
+
+        {/* Right Sidebar - Export Panel */}
+        <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
+          <ExportPanel
+            originalImage={originalImage}
+            cropAreas={cropAreas}
+            imageScale={imageScale}
+            imageOffset={imageOffset}
+            canvasSize={canvasSize}
+          />
+        </div>
       </div>
 
-      {/* Main Canvas Area */}
-      <div className="flex-1 bg-gray-800 relative overflow-hidden">
-        <CropCanvas
-          imageUrl={imageUrl}
-          originalImage={originalImage}
-          cropAreas={cropAreas}
-          selectedCropId={selectedCropId}
-          onCropSelect={setSelectedCropId}
-          onCropUpdate={updateCropArea}
-          onCropAdd={addCropArea}
-          imageScale={imageScale}
-          imageOffset={imageOffset}
-          onImageTransform={({ scale, offset }) => {
-            setImageScale(scale);
-            setImageOffset(offset);
+      {/* Advanced Crop Editor Modal */}
+      {advancedEditingCrop && (
+        <AdvancedCropEditor
+          isOpen={advancedEditorOpen}
+          onClose={() => {
+            setAdvancedEditorOpen(false);
+            setAdvancedEditingCrop(null);
           }}
-          onCanvasResize={setCanvasSize}
-        />
-      </div>
-
-      {/* Right Sidebar - Export Panel */}
-      <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
-        <ExportPanel
+          crop={advancedEditingCrop}
           originalImage={originalImage}
-          cropAreas={cropAreas}
+          onUpdateCrop={handleAdvancedCropUpdate}
           imageScale={imageScale}
           imageOffset={imageOffset}
-          canvasSize={canvasSize}
         />
-      </div>
-    </div>
+      )}
+    </>
   );
 };
