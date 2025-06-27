@@ -769,7 +769,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white flex items-center">
                 <Settings className="h-5 w-5 mr-2" />
-                Responsive Settings
+                Settings
               </h3>
             </div>
 
@@ -800,14 +800,14 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
               {/* Responsive Features Info */}
               <div className="bg-gray-800 rounded-lg p-3">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">✨ Responsive Features</h4>
+                <h4 className="text-sm font-semibold text-gray-300 mb-2">Features</h4>
                 <div className="text-xs text-gray-400 space-y-1">
-                  <div>• <strong>Auto-scaling:</strong> Maintains aspect ratio</div>
-                  <div>• <strong>Seamless cropping:</strong> No visible crop lines</div>
-                  <div>• <strong>Fluid adjustment:</strong> Adapts to container</div>
-                  <div>• <strong>Centered focal point:</strong> Always properly displayed</div>
-                  <div>• <strong>Device responsive:</strong> Works on all screen sizes</div>
-                  <div>• <strong>Zoom & pan:</strong> Interactive preview</div>
+                  <div>• Auto-scaling maintains aspect ratio</div>
+                  <div>• Seamless cropping without visible lines</div>
+                  <div>• Fluid adjustment adapts to container</div>
+                  <div>• Centered focal point always displayed</div>
+                  <div>• Device responsive works on all screens</div>
+                  <div>• Interactive zoom and pan preview</div>
                 </div>
               </div>
 
@@ -849,7 +849,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
                 {showUncropped && (
                   <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
-                    <strong>Responsive Context View:</strong> Shows the full image with responsive scaling. 
+                    <strong>Context View:</strong> Shows the full image with responsive scaling. 
                     The image automatically adjusts to fit the container while maintaining aspect ratio.
                     Seamless cropping ensures no visible crop lines during responsive adjustments.
                   </div>
@@ -972,7 +972,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 font-medium transition-colors"
               >
                 <Download className="h-4 w-4" />
-                <span>Export Responsive Crop</span>
+                <span>Export Crop</span>
               </button>
               
               <div className="flex space-x-2">
