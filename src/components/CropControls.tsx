@@ -282,32 +282,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   <span className="text-xs text-gray-400">degrees</span>
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleRotationChange('0')}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
-                    >
-                      0°
-                    </button>
-                    <button
-                      onClick={() => handleRotationChange('90')}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
-                    >
-                      90°
-                    </button>
-                    <button
-                      onClick={() => handleRotationChange('180')}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
-                    >
-                      180°
-                    </button>
-                    <button
-                      onClick={() => handleRotationChange('270')}
-                      className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
-                    >
-                      270°
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
