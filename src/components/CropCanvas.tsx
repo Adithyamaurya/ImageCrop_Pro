@@ -77,12 +77,16 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
       const isSelected = crop.id === selectedCropId;
       const rotation = crop.rotation || 0;
       
+      // Calculate rotation values at the beginning of the loop
+      const centerX = crop.x + crop.width / 2;
+      const centerY = crop.y + crop.height / 2;
+      const cos = Math.cos((rotation * Math.PI) / 180);
+      const sin = Math.sin((rotation * Math.PI) / 180);
+      
       // Save context for rotation
       ctx.save();
       
       // Move to crop center for rotation
-      const centerX = crop.x + crop.width / 2;
-      const centerY = crop.y + crop.height / 2;
       ctx.translate(centerX, centerY);
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.translate(-centerX, -centerY);
@@ -107,10 +111,6 @@ export const CropCanvas: React.FC<CropCanvasProps> = ({
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
         ctx.setLineDash([]);
-        
-        // Calculate rotated handle positions
-        const cos = Math.cos((rotation * Math.PI) / 180);
-        const sin = Math.sin((rotation * Math.PI) / 180);
         
         const rotatePoint = (x: number, y: number) => {
           const dx = x - centerX;
