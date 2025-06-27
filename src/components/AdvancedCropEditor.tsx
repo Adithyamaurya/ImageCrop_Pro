@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff, Undo } from 'lucide-react';
 import { CropArea } from '../App';
+import { ResponsiveImageContainer } from './ResponsiveImageContainer';
 
 interface AdvancedCropEditorProps {
   isOpen: boolean;
@@ -638,54 +639,66 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         <div className="flex flex-1 overflow-hidden">
           {/* Main Preview Area */}
           <div className="flex-1 bg-gray-800 flex flex-col">
-            {/* Preview Canvas */}
-            <div className="flex-1 flex items-center justify-center p-4 relative">
-              <div 
-                ref={containerRef}
-                className="relative bg-gray-700 rounded-lg p-4 shadow-lg max-w-full max-h-full overflow-auto"
-              >
-                <canvas
-                  ref={canvasRef}
-                  className="max-w-full max-h-full rounded border border-gray-600"
-                  style={{ 
-                    imageRendering: 'pixelated',
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    cursor: 'default'
-                  }}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseLeave}
+            {/* Preview Canvas - REPLACED WITH RESPONSIVE IMAGE CONTAINER */}
+            <div 
+              ref={containerRef}
+              className="flex-1 flex items-center justify-center p-4 relative bg-gray-700 rounded-lg shadow-lg max-w-full max-h-full overflow-hidden"
+            >
+              {originalImage && (
+                <ResponsiveImageContainer
+                  src={originalImage.src}
+                  alt="Crop Preview"
+                  className="w-full h-full rounded border border-gray-600"
+                  objectFit={showUncropped ? "contain" : "cover"}
+                  objectPosition="center"
+                  enableZoom={true}
+                  maxZoom={5}
+                  minZoom={0.1}
+                  showLoadingState={true}
                 />
+              )}
+              
+              {/* Overlay Canvas for Crop Visualization */}
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 pointer-events-none opacity-80"
+                style={{ 
+                  imageRendering: 'pixelated',
+                  maxWidth: '100%',
+                  maxHeight: '100%'
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+              />
                 
-                {/* Preview Controls Overlay */}
-                <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
-                  {crop.rotation && crop.rotation !== 0 && (
-                    <span className="ml-2 text-orange-400">
-                      ↻ {Math.round(crop.rotation)}°
-                    </span>
-                  )}
-                  {(isDragging || isResizing) && (
-                    <span className="ml-2 text-blue-400">
-                      • {isDragging ? 'Moving' : 'Resizing'}
-                    </span>
-                  )}
-                </div>
-
-                {/* View Mode Indicator */}
-                <div className="absolute top-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  {showUncropped ? 'Context View' : 'Crop Only'}
-                </div>
-
-                {/* Interaction Instructions */}
-                {showUncropped && !isDragging && !isResizing && (
-                  <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                    Drag crop to move • Drag handles to resize
-                  </div>
+              {/* Preview Controls Overlay */}
+              <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
+                {crop.rotation && crop.rotation !== 0 && (
+                  <span className="ml-2 text-orange-400">
+                    ↻ {Math.round(crop.rotation)}°
+                  </span>
+                )}
+                {(isDragging || isResizing) && (
+                  <span className="ml-2 text-blue-400">
+                    • {isDragging ? 'Moving' : 'Resizing'}
+                  </span>
                 )}
               </div>
+
+              {/* View Mode Indicator */}
+              <div className="absolute top-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                {showUncropped ? 'Context View' : 'Crop Only'}
+              </div>
+
+              {/* Interaction Instructions */}
+              {showUncropped && !isDragging && !isResizing && (
+                <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                  Responsive • Auto-scaling • Seamless cropping
+                </div>
+              )}
             </div>
 
             {/* Crop Navigation Controls */}
@@ -756,7 +769,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white flex items-center">
                 <Settings className="h-5 w-5 mr-2" />
-                Settings
+                Responsive Settings
               </h3>
             </div>
 
@@ -785,16 +798,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* Interaction Controls Info */}
+              {/* Responsive Features Info */}
               <div className="bg-gray-800 rounded-lg p-3">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">Interaction Controls</h4>
+                <h4 className="text-sm font-semibold text-gray-300 mb-2">✨ Responsive Features</h4>
                 <div className="text-xs text-gray-400 space-y-1">
-                  <div>• <strong>Drag crop area:</strong> Move position</div>
-                  <div>• <strong>Drag corner handles:</strong> Resize proportionally</div>
-                  <div>• <strong>Drag edge handles:</strong> Resize single dimension</div>
-                  <div>• <strong>No hover effects:</strong> Clean interaction</div>
-                  <div>• <strong>Maintains aspect ratio:</strong> If locked</div>
-                  <div>• <strong>Visual feedback:</strong> Only during active interaction</div>
+                  <div>• <strong>Auto-scaling:</strong> Maintains aspect ratio</div>
+                  <div>• <strong>Seamless cropping:</strong> No visible crop lines</div>
+                  <div>• <strong>Fluid adjustment:</strong> Adapts to container</div>
+                  <div>• <strong>Centered focal point:</strong> Always properly displayed</div>
+                  <div>• <strong>Device responsive:</strong> Works on all screen sizes</div>
+                  <div>• <strong>Zoom & pan:</strong> Interactive preview</div>
                 </div>
               </div>
 
@@ -836,9 +849,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
                 {showUncropped && (
                   <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
-                    <strong>Context View:</strong> Shows the full image with the crop area highlighted. 
-                    Uncropped areas are displayed at 30% opacity. Drag the crop area to move it, or drag the handles to resize.
-                    No hover effects during interaction for clean, focused editing.
+                    <strong>Responsive Context View:</strong> Shows the full image with responsive scaling. 
+                    The image automatically adjusts to fit the container while maintaining aspect ratio.
+                    Seamless cropping ensures no visible crop lines during responsive adjustments.
                   </div>
                 )}
               </div>
@@ -959,7 +972,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 font-medium transition-colors"
               >
                 <Download className="h-4 w-4" />
-                <span>Export Crop</span>
+                <span>Export Responsive Crop</span>
               </button>
               
               <div className="flex space-x-2">
