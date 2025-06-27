@@ -743,19 +743,16 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     const crop = cropAreas.find(c => c.id === contextMenu.cropId);
     if (!crop) return;
     
-    const newCrop: Omit<CropArea, 'id'> = {
-      x: crop.x + 30,
-      y: crop.y + 30,
-      width: crop.width,
-      height: crop.height,
-      aspectRatio: crop.aspectRatio,
-      rotation: crop.rotation || 0,
-      name: `${crop.name} Copy`,
-      visible: true,
-      zIndex: (crop.zIndex || 0) + 1
-    };
+    // Use the onCropCopy handler which should create a duplicate
+    onCropCopy(crop.id);
+    closeContextMenu();
+  };
+
+  const handleAdvancedEdit = () => {
+    if (!contextMenu.cropId) return;
     
-    onCropAdd(newCrop);
+    onCropDoubleClick(contextMenu.cropId);
+    closeContextMenu();
   };
 
   const handleFitToImage = () => {
@@ -777,6 +774,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     } else {
       onCropUpdate(crop.id, updates);
     }
+    closeContextMenu();
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1145,7 +1143,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         crop={contextMenuCrop}
         onClose={closeContextMenu}
         onDuplicate={handleCropDuplicate}
-        onAdvancedEdit={() => contextMenu.cropId && onCropDoubleClick(contextMenu.cropId)}
+        onAdvancedEdit={handleAdvancedEdit}
         onFitToImage={handleFitToImage}
       />
       
