@@ -25,11 +25,6 @@ interface ViewportConstraints {
   viewportHeight: number;
 }
 
-interface Position {
-  x: number;
-  y: number;
-}
-
 export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = ({
   imageUrl,
   originalImage,
@@ -66,10 +61,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     viewportWidth: 0,
     viewportHeight: 0
   });
-
-  // Position selector marker state
-  const [positionMarker, setPositionMarker] = useState<Position | null>(null);
-  const [markerAnimation, setMarkerAnimation] = useState(false);
 
   // Calculate viewport constraints
   const updateViewportConstraints = useCallback(() => {
@@ -291,46 +282,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       }
     }
 
-    // Draw position marker if active
-    if (positionMarker) {
-      const markerSize = 20;
-      const pulseSize = markerAnimation ? 30 : 20;
-      
-      // Draw pulsing outer circle
-      ctx.strokeStyle = '#3B82F6';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([]);
-      ctx.globalAlpha = markerAnimation ? 0.3 : 0.6;
-      ctx.beginPath();
-      ctx.arc(positionMarker.x, positionMarker.y, pulseSize, 0, 2 * Math.PI);
-      ctx.stroke();
-      
-      // Draw inner filled circle
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#3B82F6';
-      ctx.beginPath();
-      ctx.arc(positionMarker.x, positionMarker.y, markerSize / 2, 0, 2 * Math.PI);
-      ctx.fill();
-      
-      // Draw crosshair
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      const crossSize = 8;
-      ctx.beginPath();
-      ctx.moveTo(positionMarker.x - crossSize, positionMarker.y);
-      ctx.lineTo(positionMarker.x + crossSize, positionMarker.y);
-      ctx.moveTo(positionMarker.x, positionMarker.y - crossSize);
-      ctx.lineTo(positionMarker.x, positionMarker.y + crossSize);
-      ctx.stroke();
-      
-      // Draw coordinates label
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(positionMarker.x + 15, positionMarker.y - 25, 80, 20);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-      ctx.fillText(`${Math.round(positionMarker.x)}, ${Math.round(positionMarker.y)}`, positionMarker.x + 20, positionMarker.y - 10);
-    }
-
     // Draw crop areas with viewport awareness
     cropAreas.forEach(crop => {
       const isSelected = crop.id === selectedCropId;
@@ -537,20 +488,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         ctx.fillText(statusText, x + 10, y + 18);
       }
     }
-
-    // Reset global alpha
-    ctx.globalAlpha = 1;
-  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd, rotating, viewportConstraints, positionMarker, markerAnimation]);
-
-  // Position marker animation effect
-  useEffect(() => {
-    if (positionMarker) {
-      const interval = setInterval(() => {
-        setMarkerAnimation(prev => !prev);
-      }, 800);
-      return () => clearInterval(interval);
-    }
-  }, [positionMarker]);
+  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd, rotating, viewportConstraints]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -679,16 +617,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
-    
-    // Check if position selector is active
-    const positionSelectorState = (window as any).positionSelectorState;
-    if (positionSelectorState?.isActive) {
-      // Set position marker and notify position selector
-      setPositionMarker(pos);
-      positionSelectorState.onPositionSelect(pos);
-      return;
-    }
-    
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
     
     // Check for rotation handle first
@@ -900,28 +828,23 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     // Update cursor based on context
     const canvas = canvasRef.current;
     if (canvas) {
-      const positionSelectorState = (window as any).positionSelectorState;
-      if (positionSelectorState?.isActive) {
-        canvas.style.cursor = 'crosshair';
-      } else {
-        const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
-        if (selectedCrop) {
-          if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
-            canvas.style.cursor = rotating ? 'grabbing' : 'grab';
-          } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
-            canvas.style.cursor = 'nw-resize';
-          } else if (getCropAt(pos.x, pos.y)) {
-            canvas.style.cursor = 'move';
-          } else {
-            canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
-          }
+      const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
+      if (selectedCrop) {
+        if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
+          canvas.style.cursor = rotating ? 'grabbing' : 'grab';
+        } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
+          canvas.style.cursor = 'nw-resize';
         } else if (getCropAt(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
-        } else if (isCreatingCrop) {
-          canvas.style.cursor = 'crosshair';
         } else {
-          canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
+          canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
         }
+      } else if (getCropAt(pos.x, pos.y)) {
+        canvas.style.cursor = 'move';
+      } else if (isCreatingCrop) {
+        canvas.style.cursor = 'crosshair';
+      } else {
+        canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
       }
     }
   };
@@ -971,8 +894,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     
     const canvas = canvasRef.current;
     if (canvas) {
-      const positionSelectorState = (window as any).positionSelectorState;
-      canvas.style.cursor = positionSelectorState?.isActive ? 'crosshair' : 'grab';
+      canvas.style.cursor = 'grab';
     }
   };
 
@@ -1007,16 +929,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         style={{ cursor: 'grab' }}
       />
       
-      {/* Position Selector Instructions */}
-      {(window as any).positionSelectorState?.isActive && (
-        <div className="absolute top-4 left-4 bg-blue-600/90 rounded-lg p-3 text-sm text-white max-w-64">
-          <div className="font-semibold mb-1">Position Selector Active</div>
-          <div className="text-xs">Click anywhere on the canvas to set a starting position for crop placement</div>
-        </div>
-      )}
-
       {/* Viewport Status Indicator */}
-      <div className="absolute top-4 right-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-64">
+      <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-64">
         <div className="space-y-1">
           <div className="font-semibold text-white">Viewport-Aware Cropping</div>
           <div>🔒 <strong>Auto-constrained:</strong> Crops stay in viewport</div>
@@ -1029,7 +943,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         </div>
       </div>
 
-      {cropAreas.length === 0 && !isCreatingCrop && !(window as any).positionSelectorState?.isActive && (
+      {cropAreas.length === 0 && !isCreatingCrop && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
             <h3 className="text-xl font-semibold text-white mb-3">Viewport-Aware Cropping!</h3>
@@ -1039,8 +953,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
               • Smart resizing prevents overflow<br/>
               • Visual indicators for boundaries<br/>
               • Auto-adjusts on window resize<br/>
-              • Red highlights show out-of-bounds areas<br/>
-              • Use Position Selector for precise placement
+              • Red highlights show out-of-bounds areas
             </p>
           </div>
         </div>
