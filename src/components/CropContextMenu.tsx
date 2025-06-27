@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { 
   Copy, 
-  Edit3, 
   Settings, 
   Maximize2
 } from 'lucide-react';
@@ -13,7 +12,6 @@ interface CropContextMenuProps {
   crop: CropArea | null;
   onClose: () => void;
   onDuplicate: () => void;
-  onRename: () => void;
   onAdvancedEdit: () => void;
   onFitToImage: () => void;
 }
@@ -24,7 +22,6 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
   crop,
   onClose,
   onDuplicate,
-  onRename,
   onAdvancedEdit,
   onFitToImage
 }) => {
@@ -59,7 +56,7 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
   // Adjust menu position to stay within viewport
   const adjustedPosition = { ...position };
   const menuWidth = 200;
-  const menuHeight = 200;
+  const menuHeight = 160; // Reduced height since we removed rename
   
   if (position.x + menuWidth > window.innerWidth) {
     adjustedPosition.x = window.innerWidth - menuWidth - 10;
@@ -127,15 +124,6 @@ export const CropContextMenu: React.FC<CropContextMenuProps> = ({
           label="Duplicate"
           onClick={onDuplicate}
           shortcut="Ctrl+D"
-        />
-        
-        <Separator />
-        
-        <MenuItem
-          icon={<Edit3 className="h-4 w-4" />}
-          label="Rename"
-          onClick={onRename}
-          shortcut="F2"
         />
         
         <Separator />

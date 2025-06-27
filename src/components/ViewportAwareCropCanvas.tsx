@@ -1145,7 +1145,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         crop={contextMenuCrop}
         onClose={closeContextMenu}
         onDuplicate={handleCropDuplicate}
-        onRename={() => contextMenu.cropId && onCropRename(contextMenu.cropId)}
         onAdvancedEdit={() => contextMenu.cropId && onCropDoubleClick(contextMenu.cropId)}
         onFitToImage={handleFitToImage}
       />
@@ -1156,7 +1155,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           <div className="font-semibold text-white">Right-Click Context Menu</div>
           <div>🖱️ <strong>Right-click crop:</strong> Show context menu</div>
           <div>📋 <strong>Duplicate:</strong> Create a copy of the crop</div>
-          <div>✏️ <strong>Rename:</strong> Edit crop name</div>
           <div>⚙️ <strong>Advanced Edit:</strong> Open detailed editor</div>
           <div>📐 <strong>Fit to Image:</strong> Resize to match image</div>
           <div className="text-xs text-gray-400 mt-2">
@@ -1173,7 +1171,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
             <p className="text-sm text-gray-400">
               • <strong>Right-click crops:</strong> Access context menu<br/>
               • <strong>Duplicate:</strong> Create copies instantly<br/>
-              • <strong>Rename:</strong> Quick name editing<br/>
               • <strong>Advanced Edit:</strong> Detailed crop editor<br/>
               • <strong>Fit to Image:</strong> Auto-resize to image bounds
             </p>

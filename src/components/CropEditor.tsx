@@ -241,11 +241,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
   };
 
-  // Context menu handlers
-  const handleCropRename = (cropId: string) => {
-    setEditingCropName(cropId);
-  };
-
+  // Context menu handlers (removed rename since it's handled in crop controls)
   const handleCropExport = (cropId: string) => {
     // This would trigger export of a single crop
     // Implementation would be similar to ExportPanel's cropImage function
@@ -296,7 +292,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onUpdateGridCrops={updateGridCrops}
             onCropDelete={deleteCropArea}
             onCropCopy={copyCropStyle}
-            onCropRename={handleCropRename}
+            onCropRename={(cropId) => setEditingCropName(cropId)}
             onUnlinkFromGrid={unlinkFromGrid}
             onCropExport={handleCropExport}
           />
