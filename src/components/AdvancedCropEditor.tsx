@@ -26,6 +26,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   onSwitchCrop
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const referenceCanvasRef = useRef<HTMLCanvasElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
@@ -127,11 +128,74 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid]);
 
+  const drawReference = useCallback(() => {
+    const canvas = referenceCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !originalImage || !crop) return;
+
+    // Set reference canvas size (smaller preview)
+    const referenceSize = 200;
+    canvas.width = referenceSize;
+    canvas.height = referenceSize;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Fill with dark background
+    ctx.fillStyle = '#374151';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Calculate scale to fit the image in the reference canvas
+    const scale = Math.min(referenceSize / originalImage.width, referenceSize / originalImage.height);
+    const scaledWidth = originalImage.width * scale;
+    const scaledHeight = originalImage.height * scale;
+    const offsetX = (referenceSize - scaledWidth) / 2;
+    const offsetY = (referenceSize - scaledHeight) / 2;
+
+    // Draw the full image
+    ctx.drawImage(
+      originalImage,
+      offsetX,
+      offsetY,
+      scaledWidth,
+      scaledHeight
+    );
+
+    // Draw crop area overlay
+    const cropX = ((crop.x - imageOffset.x) / imageScale) * scale + offsetX;
+    const cropY = ((crop.y - imageOffset.y) / imageScale) * scale + offsetY;
+    const cropWidth = (crop.width / imageScale) * scale;
+    const cropHeight = (crop.height / imageScale) * scale;
+
+    // Draw semi-transparent overlay on non-crop areas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    
+    // Top
+    ctx.fillRect(0, 0, referenceSize, Math.max(0, cropY));
+    // Bottom
+    ctx.fillRect(0, cropY + cropHeight, referenceSize, referenceSize - (cropY + cropHeight));
+    // Left
+    ctx.fillRect(0, Math.max(0, cropY), Math.max(0, cropX), cropHeight);
+    // Right
+    ctx.fillRect(cropX + cropWidth, Math.max(0, cropY), referenceSize - (cropX + cropWidth), cropHeight);
+
+    // Draw crop area border
+    ctx.strokeStyle = '#3B82F6';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.strokeRect(cropX, cropY, cropWidth, cropHeight);
+
+    // Draw crop area highlight
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+    ctx.fillRect(cropX, cropY, cropWidth, cropHeight);
+  }, [originalImage, crop, imageScale, imageOffset]);
+
   useEffect(() => {
     if (isOpen) {
       drawPreview();
+      drawReference();
     }
-  }, [isOpen, drawPreview]);
+  }, [isOpen, drawPreview, drawReference]);
 
   const handleExport = async () => {
     const canvas = canvasRef.current;
@@ -235,6 +299,23 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
           <div className="flex-1 bg-gray-800 flex flex-col">
             {/* Preview Canvas */}
             <div className="flex-1 flex items-center justify-center p-4 relative">
+              {/* Reference Image Preview */}
+              <div className="absolute top-4 left-4 bg-gray-700 rounded-lg p-2 shadow-lg border border-gray-600">
+                <div className="text-xs text-gray-300 mb-2 text-center">Reference</div>
+                <canvas
+                  ref={referenceCanvasRef}
+                  className="rounded border border-gray-500"
+                  style={{ 
+                    width: '120px',
+                    height: '120px',
+                    imageRendering: 'pixelated'
+                  }}
+                />
+                <div className="text-xs text-gray-400 mt-1 text-center">
+                  {Math.round(crop.width)} × {Math.round(crop.height)}
+                </div>
+              </div>
+
               <div className="relative bg-gray-700 rounded-lg p-4 shadow-lg">
                 <canvas
                   ref={canvasRef}
