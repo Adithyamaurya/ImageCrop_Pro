@@ -57,7 +57,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizing, setResizing] = useState<{ cropId: string; handle: string } | null>(null);
-  const [rotating, setRotating] = useState<{ cropId: string; startAngle: number; initialRotation: number } | null>(null);
+  const [rotating, setRotating] = useState<{ cropId: string; startAngle: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
@@ -456,7 +456,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           ctx.strokeRect(rotated.x - handleSize/2, rotated.y - handleSize/2, handleSize, handleSize);
         });
 
-        // ENHANCED ROTATION HANDLE - NOW FULLY OPERATIONAL!
+        // Rotation handle (circle above the crop)
         const rotationHandleDistance = 30;
         const rotationHandle = rotatePoint(
           crop.x + crop.width/2, 
@@ -481,56 +481,29 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           ctx.lineTo(rotationHandle.x, rotationHandle.y);
           ctx.stroke();
           
-          // Draw rotation handle (ENHANCED YELLOW CIRCLE)
+          // Draw rotation handle (circle)
           ctx.setLineDash([]);
-          
-          // Outer glow effect when rotating
-          if (rotating?.cropId === crop.id) {
-            ctx.shadowColor = '#F59E0B';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
-          }
-          
-          // Main rotation handle - BRIGHT YELLOW/ORANGE
-          ctx.fillStyle = rotating?.cropId === crop.id ? '#F97316' : '#F59E0B'; // Orange when active, yellow when idle
+          ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(rotationHandle.x, rotationHandle.y, handleSize/2 + 4, 0, 2 * Math.PI);
+          ctx.arc(rotationHandle.x, rotationHandle.y, handleSize/2 + 2, 0, 2 * Math.PI);
           ctx.fill();
           ctx.stroke();
           
-          // Reset shadow
-          ctx.shadowBlur = 0;
-          
-          // Inner rotation icon (curved arrow) - WHITE for contrast
+          // Draw rotation icon (curved arrow)
           ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(rotationHandle.x, rotationHandle.y, 5, -Math.PI/2, Math.PI/2);
+          ctx.arc(rotationHandle.x, rotationHandle.y, 4, -Math.PI/2, Math.PI/2);
           ctx.stroke();
-          
-          // Arrow head - more prominent
+          // Arrow head
           ctx.beginPath();
-          ctx.moveTo(rotationHandle.x + 3, rotationHandle.y + 5);
-          ctx.lineTo(rotationHandle.x + 6, rotationHandle.y + 3);
-          ctx.lineTo(rotationHandle.x + 6, rotationHandle.y + 7);
+          ctx.moveTo(rotationHandle.x + 2, rotationHandle.y + 4);
+          ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 2);
+          ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 6);
           ctx.closePath();
           ctx.fillStyle = '#FFFFFF';
           ctx.fill();
-          
-          // Add rotation angle indicator when rotating
-          if (rotating?.cropId === crop.id) {
-            const currentRotation = Math.round(crop.rotation || 0);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(rotationHandle.x - 20, rotationHandle.y - 35, 40, 20);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${currentRotation}°`, rotationHandle.x, rotationHandle.y - 22);
-            ctx.textAlign = 'left'; // Reset text alignment
-          }
         }
       }
 
@@ -714,9 +687,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     return null;
   };
 
-  // ENHANCED ROTATION HANDLE DETECTION - NOW FULLY OPERATIONAL!
   const getRotationHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = 16; // Increased size for better interaction
+    const handleSize = 14;
     const rotation = crop.rotation || 0;
     const centerX = crop.x + crop.width / 2;
     const centerY = crop.y + crop.height / 2;
@@ -736,7 +708,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     return distance <= handleSize ? 'rotate' : null;
   };
 
-  // ENHANCED ANGLE CALCULATION FOR SMOOTH ROTATION
   const calculateAngleFromCenter = (centerX: number, centerY: number, mouseX: number, mouseY: number) => {
     const angle = Math.atan2(mouseY - centerY, mouseX - centerX);
     const degrees = (angle * 180) / Math.PI + 90; // Add 90 to make 0 degrees point up
@@ -840,26 +811,14 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     const pos = getMousePos(e);
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
     
-    // ENHANCED ROTATION HANDLE CHECK - NOW FULLY OPERATIONAL!
+    // Check for rotation handle first
     if (selectedCrop) {
       const rotationHandle = getRotationHandle(pos.x, pos.y, selectedCrop);
       if (rotationHandle) {
         const centerX = selectedCrop.x + selectedCrop.width / 2;
         const centerY = selectedCrop.y + selectedCrop.height / 2;
         const startAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
-        
-        // Store initial rotation for smooth relative rotation
-        setRotating({ 
-          cropId: selectedCrop.id, 
-          startAngle,
-          initialRotation: selectedCrop.rotation || 0
-        });
-        
-        console.log('🔄 ROTATION STARTED:', {
-          cropId: selectedCrop.id,
-          startAngle,
-          initialRotation: selectedCrop.rotation || 0
-        });
+        setRotating({ cropId: selectedCrop.id, startAngle });
         return;
       }
       
@@ -918,7 +877,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
     
-    // ENHANCED ROTATION HANDLING - NOW FULLY OPERATIONAL!
     if (rotating) {
       const crop = cropAreas.find(c => c.id === rotating.cropId);
       if (!crop) return;
@@ -932,12 +890,13 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Calculate the difference from the starting angle
       let angleDiff = currentAngle - rotating.startAngle;
       
-      // Handle angle wrapping for smooth rotation
+      // Handle angle wrapping
       if (angleDiff > 180) angleDiff -= 360;
       if (angleDiff < -180) angleDiff += 360;
       
-      // Calculate new rotation based on initial rotation + difference
-      let newRotation = rotating.initialRotation + angleDiff;
+      // Apply the angle difference to the crop's current rotation
+      const currentRotation = crop.rotation || 0;
+      let newRotation = currentRotation + angleDiff;
       
       // Snap to 15-degree increments when holding Shift
       if (e.shiftKey) {
@@ -947,13 +906,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Normalize angle to 0-360 range
       newRotation = ((newRotation % 360) + 360) % 360;
       
-      console.log('🔄 ROTATING:', {
-        currentAngle,
-        angleDiff,
-        newRotation,
-        shiftKey: e.shiftKey
-      });
-      
       // Update crop or grid
       if (crop.gridId) {
         onUpdateGridCrops(crop.gridId, { rotation: newRotation });
@@ -961,6 +913,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         onCropUpdate(crop.id, { rotation: newRotation });
       }
       
+      // Update the start angle for the next movement
+      setRotating({ ...rotating, startAngle: currentAngle });
     } else if (resizing) {
       const crop = cropAreas.find(c => c.id === resizing.cropId);
       if (!crop) return;
@@ -1093,7 +1047,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       });
     }
 
-    // ENHANCED CURSOR MANAGEMENT - NOW INCLUDES ROTATION HANDLE!
+    // Update cursor based on context
     const canvas = canvasRef.current;
     if (canvas) {
       const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
@@ -1118,12 +1072,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const handleMouseUp = () => {
-    // ENHANCED ROTATION COMPLETION
-    if (rotating) {
-      console.log('🔄 ROTATION COMPLETED for crop:', rotating.cropId);
-      setRotating(null);
-    }
-    
     // Handle crop creation completion
     if (isCreatingCrop) {
       const x = Math.min(newCropStart.x, newCropEnd.x);
@@ -1169,6 +1117,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
     setIsDragging(false);
     setResizing(null);
+    setRotating(null);
     setIsPanning(false);
     
     const canvas = canvasRef.current;
@@ -1230,7 +1179,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
             <p className="text-sm text-gray-400">
               • Drag on image to create crops<br/>
               • Drag crops to move them<br/>
-              • <strong className="text-yellow-400">Use yellow rotation handle to rotate</strong><br/>
+              • Use rotation handle to rotate<br/>
               • Scroll to zoom<br/>
               • Drag empty space to pan<br/>
               • Double-click crop for advanced editing<br/>
@@ -1239,21 +1188,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           </div>
         </div>
       )}
-
-      {/* Enhanced Instructions Overlay */}
-      <div className="absolute top-4 right-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-52">
-        <div className="space-y-1">
-          <div>🖱️ <strong>Drag on image:</strong> Create crop</div>
-          <div>✋ <strong>Drag crop:</strong> Move crop</div>
-          <div>🟡 <strong>Yellow handle:</strong> Click & drag to rotate</div>
-          <div>📐 <strong>Blue handles:</strong> Resize crop</div>
-          <div>🔄 <strong>Scroll:</strong> Zoom in/out</div>
-          <div>✋ <strong>Drag empty:</strong> Pan image</div>
-          <div>⇧ <strong>Shift + rotate:</strong> Snap to 15°</div>
-          <div>🖱️ <strong>Double-click crop:</strong> Advanced editor</div>
-          <div>🖱️ <strong>Right-click crop:</strong> Context menu</div>
-        </div>
-      </div>
     </div>
   );
 };
