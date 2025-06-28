@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff, Undo } from 'lucide-react';
 import { CropArea } from '../App';
-import { ResponsiveImageContainer } from './ResponsiveImageContainer';
 
 interface AdvancedCropEditorProps {
   isOpen: boolean;
@@ -110,27 +109,48 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !originalImage || !crop) return;
+    const container = containerRef.current;
+    if (!canvas || !ctx || !originalImage || !crop || !container) return;
 
-    // Calculate canvas size to show both cropped and uncropped areas
+    // Get container dimensions
+    const containerRect = container.getBoundingClientRect();
+    const maxWidth = containerRect.width - 40; // Account for padding
+    const maxHeight = containerRect.height - 40;
+
     let canvasWidth, canvasHeight;
     
     if (showUncropped) {
       // Show the full image with crop highlighted
       const imgAspect = originalImage.width / originalImage.height;
-      const maxSize = 600; // Maximum canvas size
       
       if (imgAspect > 1) {
-        canvasWidth = Math.min(maxSize, originalImage.width * previewScale);
+        canvasWidth = Math.min(maxWidth, originalImage.width * 0.5);
         canvasHeight = canvasWidth / imgAspect;
       } else {
-        canvasHeight = Math.min(maxSize, originalImage.height * previewScale);
+        canvasHeight = Math.min(maxHeight, originalImage.height * 0.5);
+        canvasWidth = canvasHeight * imgAspect;
+      }
+      
+      // Ensure canvas fits in container
+      if (canvasWidth > maxWidth) {
+        canvasWidth = maxWidth;
+        canvasHeight = canvasWidth / imgAspect;
+      }
+      if (canvasHeight > maxHeight) {
+        canvasHeight = maxHeight;
         canvasWidth = canvasHeight * imgAspect;
       }
     } else {
       // Show only the crop area
-      canvasWidth = crop.width * previewScale;
-      canvasHeight = crop.height * previewScale;
+      const cropAspect = crop.width / crop.height;
+      
+      if (cropAspect > 1) {
+        canvasWidth = Math.min(maxWidth, 600);
+        canvasHeight = canvasWidth / cropAspect;
+      } else {
+        canvasHeight = Math.min(maxHeight, 600);
+        canvasWidth = canvasHeight * cropAspect;
+      }
     }
 
     canvas.width = canvasWidth;
@@ -150,11 +170,21 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         canvasHeight
       );
 
-      // Calculate crop area position on the full image canvas
-      const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
-      const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
-      const cropCanvasWidth = (crop.width / imageScale) * previewScale;
-      const cropCanvasHeight = (crop.height / imageScale) * previewScale;
+      // Calculate crop area position on the canvas
+      const scaleX = canvasWidth / originalImage.width;
+      const scaleY = canvasHeight / originalImage.height;
+      
+      // Convert crop coordinates from canvas space to image space
+      const cropImageX = (crop.x - imageOffset.x) / imageScale;
+      const cropImageY = (crop.y - imageOffset.y) / imageScale;
+      const cropImageWidth = crop.width / imageScale;
+      const cropImageHeight = crop.height / imageScale;
+      
+      // Scale to canvas coordinates
+      const cropCanvasX = cropImageX * scaleX;
+      const cropCanvasY = cropImageY * scaleY;
+      const cropCanvasWidth = cropImageWidth * scaleX;
+      const cropCanvasHeight = cropImageHeight * scaleY;
 
       // Draw the crop area at full opacity
       ctx.globalAlpha = 1.0;
@@ -170,25 +200,19 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.translate(-centerX, -centerY);
       }
 
-      // Calculate source crop coordinates
-      const sourceX = (crop.x - imageOffset.x) / imageScale;
-      const sourceY = (crop.y - imageOffset.y) / imageScale;
-      const sourceWidth = crop.width / imageScale;
-      const sourceHeight = crop.height / imageScale;
-
-      // Ensure crop is within image bounds
-      const clampedSourceX = Math.max(0, Math.min(sourceX, originalImage.width));
-      const clampedSourceY = Math.max(0, Math.min(sourceY, originalImage.height));
-      const clampedSourceWidth = Math.max(1, Math.min(sourceWidth, originalImage.width - clampedSourceX));
-      const clampedSourceHeight = Math.max(1, Math.min(sourceHeight, originalImage.height - clampedSourceY));
+      // Ensure crop coordinates are within image bounds
+      const clampedImageX = Math.max(0, Math.min(cropImageX, originalImage.width));
+      const clampedImageY = Math.max(0, Math.min(cropImageY, originalImage.height));
+      const clampedImageWidth = Math.max(1, Math.min(cropImageWidth, originalImage.width - clampedImageX));
+      const clampedImageHeight = Math.max(1, Math.min(cropImageHeight, originalImage.height - clampedImageY));
 
       // Draw the cropped portion at full opacity
       ctx.drawImage(
         originalImage,
-        clampedSourceX,
-        clampedSourceY,
-        clampedSourceWidth,
-        clampedSourceHeight,
+        clampedImageX,
+        clampedImageY,
+        clampedImageWidth,
+        clampedImageHeight,
         cropCanvasX,
         cropCanvasY,
         cropCanvasWidth,
@@ -199,7 +223,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Draw crop area border - static blue, enhanced orange only during active interaction
+      // Draw crop area border
       const borderColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
       const borderWidth = (isDragging || isResizing) ? 3 : 2;
       
@@ -208,12 +232,12 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.setLineDash([]);
       ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
-      // Draw crop area overlay - enhanced only during interaction
+      // Draw crop area overlay
       const overlayOpacity = (isDragging || isResizing) ? 0.15 : 0.08;
       ctx.fillStyle = `rgba(59, 130, 246, ${overlayOpacity})`;
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
-      // Draw resize handles - always visible in context view
+      // Draw resize handles
       const handleSize = 10;
       const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
       
@@ -240,7 +264,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       });
 
     } else {
-      // Show only the crop area (original behavior)
+      // Show only the crop area (crop-only mode)
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -282,7 +306,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Add border for crop-only mode - enhanced only during interaction
+      // Add border for crop-only mode
       if (isDragging || isResizing) {
         ctx.strokeStyle = '#F59E0B';
         ctx.lineWidth = 3;
@@ -301,7 +325,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       
       if (showUncropped) {
         // Grid over the entire canvas
-        const gridWidth = canvas.width / 9; // 3x3 grid over full image
+        const gridWidth = canvas.width / 9;
         const gridHeight = canvas.height / 9;
         
         // Vertical lines
@@ -458,7 +482,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       onUpdateCrop(newCrop);
       
     } else if (isDragging) {
-      // Handle dragging - NO HOVER EFFECTS, ONLY DRAG
+      // Handle dragging
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
@@ -475,8 +499,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         y: newY
       });
       
+      setDragStart(pos);
     } else {
-      // Update cursor based on what's under mouse - ONLY when not interacting
+      // Update cursor based on what's under mouse
       if (canvas && !isDragging && !isResizing) {
         const handle = getResizeHandle(pos.x, pos.y);
         if (handle) {
@@ -639,33 +664,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         <div className="flex flex-1 overflow-hidden">
           {/* Main Preview Area */}
           <div className="flex-1 bg-gray-800 flex flex-col">
-            {/* Preview Canvas - REPLACED WITH RESPONSIVE IMAGE CONTAINER */}
+            {/* Preview Canvas */}
             <div 
               ref={containerRef}
               className="flex-1 flex items-center justify-center p-4 relative bg-gray-700 rounded-lg shadow-lg max-w-full max-h-full overflow-hidden"
             >
-              {originalImage && (
-                <ResponsiveImageContainer
-                  src={originalImage.src}
-                  alt="Crop Preview"
-                  className="w-full h-full rounded border border-gray-600"
-                  objectFit={showUncropped ? "contain" : "cover"}
-                  objectPosition="center"
-                  enableZoom={true}
-                  maxZoom={5}
-                  minZoom={0.1}
-                  showLoadingState={true}
-                />
-              )}
-              
-              {/* Overlay Canvas for Crop Visualization */}
               <canvas
                 ref={canvasRef}
-                className="absolute inset-0 pointer-events-none opacity-80"
+                className="max-w-full max-h-full border border-gray-600 rounded"
                 style={{ 
                   imageRendering: 'pixelated',
-                  maxWidth: '100%',
-                  maxHeight: '100%'
                 }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
@@ -696,7 +704,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               {/* Interaction Instructions */}
               {showUncropped && !isDragging && !isResizing && (
                 <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  Responsive • Auto-scaling • Seamless cropping
+                  Drag crop • Resize handles • Interactive preview
                 </div>
               )}
             </div>
@@ -798,19 +806,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* Responsive Features Info */}
-              <div className="bg-gray-800 rounded-lg p-3">
-                <h4 className="text-sm font-semibold text-gray-300 mb-2">Features</h4>
-                <div className="text-xs text-gray-400 space-y-1">
-                  <div>• Auto-scaling maintains aspect ratio</div>
-                  <div>• Seamless cropping without visible lines</div>
-                  <div>• Fluid adjustment adapts to container</div>
-                  <div>• Centered focal point always displayed</div>
-                  <div>• Device responsive works on all screens</div>
-                  <div>• Interactive zoom and pan preview</div>
-                </div>
-              </div>
-
               {/* View Options */}
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
@@ -846,14 +841,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     />
                   </button>
                 </div>
-
-                {showUncropped && (
-                  <div className="text-xs text-gray-400 bg-gray-800 rounded p-2">
-                    <strong>Context View:</strong> Shows the full image with responsive scaling. 
-                    The image automatically adjusts to fit the container while maintaining aspect ratio.
-                    Seamless cropping ensures no visible crop lines during responsive adjustments.
-                  </div>
-                )}
               </div>
 
               {/* Crop Properties */}
