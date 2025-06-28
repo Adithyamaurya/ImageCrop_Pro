@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, Copy, Edit3, Check, X, RotateCw, Grid3X3, Link, Unlink } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, RotateCw, Grid3X3, Link, Unlink } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface CropControlsProps {
@@ -67,32 +67,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
       onUpdateGridCrops(selectedCrop.gridId, updates);
     } else {
       onUpdateCrop(selectedCrop.id, updates);
-    }
-  };
-
-  const startRename = (crop: CropArea) => {
-    onSetEditingCropName(crop.id);
-    setTempName(crop.name);
-  };
-
-  const saveRename = (cropId: string) => {
-    if (tempName.trim()) {
-      onUpdateCrop(cropId, { name: tempName.trim() });
-    }
-    onSetEditingCropName(null);
-    setTempName('');
-  };
-
-  const cancelRename = () => {
-    onSetEditingCropName(null);
-    setTempName('');
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent, cropId: string) => {
-    if (e.key === 'Enter') {
-      saveRename(cropId);
-    } else if (e.key === 'Escape') {
-      cancelRename();
     }
   };
 
@@ -204,7 +178,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   onClick={() => setShowMultipleDialog(false)}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <Plus className="h-5 w-5 rotate-45" />
                 </button>
               </div>
 
@@ -338,126 +312,73 @@ export const CropControls: React.FC<CropControlsProps> = ({
             {cropAreas.map((crop) => (
               <div
                 key={crop.id}
-                className={`p-3 rounded-lg transition-colors ${
+                className={`p-3 rounded-lg transition-colors cursor-pointer ${
                   selectedCrop?.id === crop.id
                     ? 'bg-blue-600/20 border border-blue-500'
                     : 'bg-gray-700 hover:bg-gray-600'
                 }`}
+                onClick={() => onSelectCrop(crop.id)}
               >
                 <div className="flex items-center justify-between">
-                  {editingCropName === crop.id ? (
-                    <div className="flex-1 flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={tempName}
-                        onChange={(e) => setTempName(e.target.value)}
-                        onKeyDown={(e) => handleKeyPress(e, crop.id)}
-                        className="flex-1 bg-gray-600 text-white text-sm rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => saveRename(crop.id)}
-                        className="text-green-400 hover:text-green-300 p-1 rounded transition-colors"
-                        title="Save name"
-                      >
-                        <Check className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={cancelRename}
-                        className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
-                        title="Cancel"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div 
-                        className="flex-1 cursor-pointer"
-                        onClick={() => onSelectCrop(crop.id)}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-white">{crop.name}</span>
-                          {crop.gridId && (
-                            <div className="flex items-center space-x-1">
-                              <Link className="h-3 w-3 text-purple-400" />
-                              <span className="text-xs text-purple-400">Grid</span>
-                            </div>
-                          )}
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-white">{crop.name}</span>
+                      {crop.gridId && (
+                        <div className="flex items-center space-x-1">
+                          <Link className="h-3 w-3 text-purple-400" />
+                          <span className="text-xs text-purple-400">Grid</span>
                         </div>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        {crop.gridId && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUnlinkFromGrid(crop.id);
-                            }}
-                            className="text-purple-400 hover:text-purple-300 p-1 rounded transition-colors"
-                            title="Unlink from grid"
-                          >
-                            <Unlink className="h-3 w-3" />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startRename(crop);
-                          }}
-                          className="text-yellow-400 hover:text-yellow-300 p-1 rounded transition-colors"
-                          title="Rename crop"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onCopyCropStyle(crop.id);
-                          }}
-                          className="text-blue-400 hover:text-blue-300 p-1 rounded transition-colors"
-                          title="Copy crop style"
-                        >
-                          <Copy className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteCrop(crop.id);
-                          }}
-                          className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
-                          title="Delete crop"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    {crop.gridId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUnlinkFromGrid(crop.id);
+                        }}
+                        className="text-purple-400 hover:text-purple-300 p-1 rounded transition-colors"
+                        title="Unlink from grid"
+                      >
+                        <Unlink className="h-3 w-3" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteCrop(crop.id);
+                      }}
+                      className="text-red-400 hover:text-red-300 p-1 rounded transition-colors"
+                      title="Delete crop"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {Math.round(crop.width)} × {Math.round(crop.height)}
+                  {crop.rotation && crop.rotation !== 0 && (
+                    <span className="ml-2 text-orange-400">
+                      ↻ {Math.round(crop.rotation)}°
+                    </span>
+                  )}
+                  {crop.aspectRatio && crop.aspectRatio > 0 && (
+                    <span className="ml-2 text-blue-400">
+                      ({crop.aspectRatio === 1 ? '1:1' : 
+                        crop.aspectRatio === 4/3 ? '4:3' : 
+                        crop.aspectRatio === 3/4 ? '3:4' : 
+                        crop.aspectRatio === 16/9 ? '16:9' : 
+                        crop.aspectRatio === 21/9 ? '21:9' : 
+                        `${crop.aspectRatio.toFixed(2)}:1`})
+                    </span>
+                  )}
+                  {crop.gridPosition && (
+                    <span className="ml-2 text-purple-400">
+                      [{crop.gridPosition.row + 1},{crop.gridPosition.col + 1}]
+                    </span>
                   )}
                 </div>
-                {editingCropName !== crop.id && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    {Math.round(crop.width)} × {Math.round(crop.height)}
-                    {crop.rotation && crop.rotation !== 0 && (
-                      <span className="ml-2 text-orange-400">
-                        ↻ {Math.round(crop.rotation)}°
-                      </span>
-                    )}
-                    {crop.aspectRatio && crop.aspectRatio > 0 && (
-                      <span className="ml-2 text-blue-400">
-                        ({crop.aspectRatio === 1 ? '1:1' : 
-                          crop.aspectRatio === 4/3 ? '4:3' : 
-                          crop.aspectRatio === 3/4 ? '3:4' : 
-                          crop.aspectRatio === 16/9 ? '16:9' : 
-                          crop.aspectRatio === 21/9 ? '21:9' : 
-                          `${crop.aspectRatio.toFixed(2)}:1`})
-                      </span>
-                    )}
-                    {crop.gridPosition && (
-                      <span className="ml-2 text-purple-400">
-                        [{crop.gridPosition.row + 1},{crop.gridPosition.col + 1}]
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -499,13 +420,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   onChange={(e) => onUpdateCrop(selectedCrop.id, { name: e.target.value })}
                   className="flex-1 bg-gray-700 text-white rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
-                <button
-                  onClick={() => startRename(selectedCrop)}
-                  className="text-yellow-400 hover:text-yellow-300 p-2 rounded transition-colors"
-                  title="Quick rename"
-                >
-                  <Edit3 className="h-4 w-4" />
-                </button>
                 {selectedCrop.gridId && (
                   <button
                     onClick={() => onUnlinkFromGrid(selectedCrop.id)}
