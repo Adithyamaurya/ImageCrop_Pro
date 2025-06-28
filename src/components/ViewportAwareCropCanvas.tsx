@@ -1170,32 +1170,20 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         onAdvancedEdit={handleAdvancedEdit}
         onFitToImage={handleFitToImage}
       />
-      
-      {/* Enhanced Viewport Status Indicator */}
-      <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-72">
-        <div className="space-y-1">
-          <div className="font-semibold text-white">✅ Working Context Menu!</div>
-          <div>🖱️ <strong>Right-click crop:</strong> Show context menu</div>
-          <div>📋 <strong>Duplicate:</strong> Create a copy of the crop</div>
-          <div>⚙️ <strong>Advanced Edit:</strong> Open detailed editor</div>
-          <div>📐 <strong>Fit to Image:</strong> Resize to match image</div>
-          <div className="text-xs text-gray-400 mt-2">
-            All actions are now fully functional!
-          </div>
-        </div>
-      </div>
 
       {cropAreas.length === 0 && !isCreatingCrop && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
-            <h3 className="text-xl font-semibold text-white mb-3">✅ Working Context Menu!</h3>
-            <p className="text-gray-300 mb-2">Create crops and right-click for quick editing options</p>
+            <h3 className="text-xl font-semibold text-white mb-3">Ready to Crop!</h3>
+            <p className="text-gray-300 mb-2">Click and drag on the image to create a crop area</p>
             <p className="text-sm text-gray-400">
-              • <strong>Right-click crops:</strong> Access context menu<br/>
-              • <strong>Duplicate:</strong> Create copies instantly<br/>
-              • <strong>Advanced Edit:</strong> Detailed crop editor<br/>
-              • <strong>Fit to Image:</strong> Auto-resize to image bounds<br/>
-              • <strong>All actions work!</strong> No more show pieces!
+              • Drag on image to create crops<br/>
+              • Drag crops to move them<br/>
+              • Use rotation handle to rotate<br/>
+              • Scroll to zoom<br/>
+              • Drag empty space to pan<br/>
+              • Double-click crop for advanced editing<br/>
+              • Right-click crop for context menu
             </p>
           </div>
         </div>
