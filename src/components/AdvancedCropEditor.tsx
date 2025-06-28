@@ -34,6 +34,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const [exportQuality, setExportQuality] = useState(0.9);
   const [originalCropState, setOriginalCropState] = useState<CropArea | null>(null);
   
+  // Canvas coordinate system state
+  const [canvasToImageScale, setCanvasToImageScale] = useState({ x: 1, y: 1 });
+  const [imageToCanvasOffset, setImageToCanvasOffset] = useState({ x: 0, y: 0 });
+  
   // Interaction states
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -53,58 +57,86 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const canGoPrevious = currentCropIndex > 0;
   const canGoNext = currentCropIndex < allCrops.length - 1;
 
+  // Convert canvas coordinates to crop coordinates
+  const canvasToCropCoords = useCallback((canvasX: number, canvasY: number) => {
+    if (showUncropped) {
+      // In context view, convert canvas coords to image coords, then to crop coords
+      const imageX = (canvasX / canvasToImageScale.x);
+      const imageY = (canvasY / canvasToImageScale.y);
+      
+      // Convert from image space to crop space (accounting for current image transform)
+      const cropX = imageX * imageScale + imageOffset.x;
+      const cropY = imageY * imageScale + imageOffset.y;
+      
+      return { x: cropX, y: cropY };
+    } else {
+      // In crop-only view, canvas coords map directly to crop coords
+      const cropX = (canvasX / previewScale);
+      const cropY = (canvasY / previewScale);
+      return { x: cropX, y: cropY };
+    }
+  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale]);
+
+  // Convert crop coordinates to canvas coordinates
+  const cropToCanvasCoords = useCallback((cropX: number, cropY: number) => {
+    if (showUncropped) {
+      // Convert crop coords to image coords, then to canvas coords
+      const imageX = (cropX - imageOffset.x) / imageScale;
+      const imageY = (cropY - imageOffset.y) / imageScale;
+      
+      const canvasX = imageX * canvasToImageScale.x;
+      const canvasY = imageY * canvasToImageScale.y;
+      
+      return { x: canvasX, y: canvasY };
+    } else {
+      // In crop-only view, crop coords map directly to canvas coords
+      return { x: cropX * previewScale, y: cropY * previewScale };
+    }
+  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale]);
+
   // Check if a point is within the crop area
-  const isPointInCrop = useCallback((x: number, y: number) => {
+  const isPointInCrop = useCallback((canvasX: number, canvasY: number) => {
     if (!showUncropped) return true; // In crop-only mode, entire canvas is draggable
     
-    const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
-    const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
-    const cropCanvasWidth = (crop.width / imageScale) * previewScale;
-    const cropCanvasHeight = (crop.height / imageScale) * previewScale;
+    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
     
-    return x >= cropCanvasX && x <= cropCanvasX + cropCanvasWidth &&
-           y >= cropCanvasY && y <= cropCanvasY + cropCanvasHeight;
-  }, [crop, imageScale, imageOffset, previewScale, showUncropped]);
+    return canvasX >= cropCanvas.x && canvasX <= cropCanvasEnd.x &&
+           canvasY >= cropCanvas.y && canvasY <= cropCanvasEnd.y;
+  }, [crop, showUncropped, cropToCanvasCoords]);
 
   // Get resize handle at position
-  const getResizeHandle = useCallback((x: number, y: number) => {
+  const getResizeHandle = useCallback((canvasX: number, canvasY: number) => {
     if (!showUncropped) return null;
     
-    const cropCanvasX = ((crop.x - imageOffset.x) / imageScale) * previewScale;
-    const cropCanvasY = ((crop.y - imageOffset.y) / imageScale) * previewScale;
-    const cropCanvasWidth = (crop.width / imageScale) * previewScale;
-    const cropCanvasHeight = (crop.height / imageScale) * previewScale;
+    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
+    const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
     
     const handleSize = 12;
     const tolerance = handleSize / 2;
     
-    // Corner handles
+    // Corner and edge handles
     const handles = [
-      { name: 'nw', x: cropCanvasX, y: cropCanvasY },
-      { name: 'ne', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY },
-      { name: 'sw', x: cropCanvasX, y: cropCanvasY + cropCanvasHeight },
-      { name: 'se', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight },
-      { name: 'n', x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY },
-      { name: 's', x: cropCanvasX + cropCanvasWidth / 2, y: cropCanvasY + cropCanvasHeight },
-      { name: 'w', x: cropCanvasX, y: cropCanvasY + cropCanvasHeight / 2 },
-      { name: 'e', x: cropCanvasX + cropCanvasWidth, y: cropCanvasY + cropCanvasHeight / 2 },
+      { name: 'nw', x: cropCanvas.x, y: cropCanvas.y },
+      { name: 'ne', x: cropCanvas.x + cropCanvasWidth, y: cropCanvas.y },
+      { name: 'sw', x: cropCanvas.x, y: cropCanvas.y + cropCanvasHeight },
+      { name: 'se', x: cropCanvas.x + cropCanvasWidth, y: cropCanvas.y + cropCanvasHeight },
+      { name: 'n', x: cropCanvas.x + cropCanvasWidth / 2, y: cropCanvas.y },
+      { name: 's', x: cropCanvas.x + cropCanvasWidth / 2, y: cropCanvas.y + cropCanvasHeight },
+      { name: 'w', x: cropCanvas.x, y: cropCanvas.y + cropCanvasHeight / 2 },
+      { name: 'e', x: cropCanvas.x + cropCanvasWidth, y: cropCanvas.y + cropCanvasHeight / 2 },
     ];
     
     for (const handle of handles) {
-      if (Math.abs(x - handle.x) <= tolerance && Math.abs(y - handle.y) <= tolerance) {
+      if (Math.abs(canvasX - handle.x) <= tolerance && Math.abs(canvasY - handle.y) <= tolerance) {
         return handle.name;
       }
     }
     
     return null;
-  }, [crop, imageScale, imageOffset, previewScale, showUncropped]);
-
-  // Convert canvas coordinates to image coordinates
-  const canvasToImageCoords = useCallback((canvasX: number, canvasY: number) => {
-    const imageX = (canvasX / previewScale) * imageScale + imageOffset.x;
-    const imageY = (canvasY / previewScale) * imageScale + imageOffset.y;
-    return { x: imageX, y: imageY };
-  }, [previewScale, imageScale, imageOffset]);
+  }, [crop, showUncropped, cropToCanvasCoords]);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -140,6 +172,13 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         canvasHeight = maxHeight;
         canvasWidth = canvasHeight * imgAspect;
       }
+      
+      // Update coordinate transformation scales
+      setCanvasToImageScale({
+        x: canvasWidth / originalImage.width,
+        y: canvasHeight / originalImage.height
+      });
+      
     } else {
       // Show only the crop area
       const cropAspect = crop.width / crop.height;
@@ -421,46 +460,48 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
-      // Convert deltas to image coordinates
-      const imageDeltaX = (deltaX / previewScale) * imageScale;
-      const imageDeltaY = (deltaY / previewScale) * imageScale;
+      // Convert canvas deltas to crop coordinate deltas
+      const cropDelta = canvasToCropCoords(deltaX, deltaY);
+      const cropOrigin = canvasToCropCoords(0, 0);
+      const cropDeltaX = cropDelta.x - cropOrigin.x;
+      const cropDeltaY = cropDelta.y - cropOrigin.y;
       
       let newCrop = { ...crop };
       
       switch (resizeHandle) {
         case 'nw':
-          newCrop.width = originalSize.width - imageDeltaX;
-          newCrop.height = originalSize.height - imageDeltaY;
-          newCrop.x = originalPosition.x + imageDeltaX;
-          newCrop.y = originalPosition.y + imageDeltaY;
+          newCrop.width = originalSize.width - cropDeltaX;
+          newCrop.height = originalSize.height - cropDeltaY;
+          newCrop.x = originalPosition.x + cropDeltaX;
+          newCrop.y = originalPosition.y + cropDeltaY;
           break;
         case 'ne':
-          newCrop.width = originalSize.width + imageDeltaX;
-          newCrop.height = originalSize.height - imageDeltaY;
-          newCrop.y = originalPosition.y + imageDeltaY;
+          newCrop.width = originalSize.width + cropDeltaX;
+          newCrop.height = originalSize.height - cropDeltaY;
+          newCrop.y = originalPosition.y + cropDeltaY;
           break;
         case 'sw':
-          newCrop.width = originalSize.width - imageDeltaX;
-          newCrop.height = originalSize.height + imageDeltaY;
-          newCrop.x = originalPosition.x + imageDeltaX;
+          newCrop.width = originalSize.width - cropDeltaX;
+          newCrop.height = originalSize.height + cropDeltaY;
+          newCrop.x = originalPosition.x + cropDeltaX;
           break;
         case 'se':
-          newCrop.width = originalSize.width + imageDeltaX;
-          newCrop.height = originalSize.height + imageDeltaY;
+          newCrop.width = originalSize.width + cropDeltaX;
+          newCrop.height = originalSize.height + cropDeltaY;
           break;
         case 'n':
-          newCrop.height = originalSize.height - imageDeltaY;
-          newCrop.y = originalPosition.y + imageDeltaY;
+          newCrop.height = originalSize.height - cropDeltaY;
+          newCrop.y = originalPosition.y + cropDeltaY;
           break;
         case 's':
-          newCrop.height = originalSize.height + imageDeltaY;
+          newCrop.height = originalSize.height + cropDeltaY;
           break;
         case 'w':
-          newCrop.width = originalSize.width - imageDeltaX;
-          newCrop.x = originalPosition.x + imageDeltaX;
+          newCrop.width = originalSize.width - cropDeltaX;
+          newCrop.x = originalPosition.x + cropDeltaX;
           break;
         case 'e':
-          newCrop.width = originalSize.width + imageDeltaX;
+          newCrop.width = originalSize.width + cropDeltaX;
           break;
       }
       
@@ -486,13 +527,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
-      // Convert canvas delta to image coordinates
-      const imageDeltaX = (deltaX / previewScale) * imageScale;
-      const imageDeltaY = (deltaY / previewScale) * imageScale;
+      // Convert canvas delta to crop coordinates
+      const cropDelta = canvasToCropCoords(deltaX, deltaY);
+      const cropOrigin = canvasToCropCoords(0, 0);
+      const cropDeltaX = cropDelta.x - cropOrigin.x;
+      const cropDeltaY = cropDelta.y - cropOrigin.y;
       
       // Calculate new position
-      const newX = originalPosition.x + imageDeltaX;
-      const newY = originalPosition.y + imageDeltaY;
+      const newX = originalPosition.x + cropDeltaX;
+      const newY = originalPosition.y + cropDeltaY;
       
       onUpdateCrop({
         x: newX,
@@ -500,6 +543,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       });
       
       setDragStart(pos);
+      setOriginalPosition({ x: newX, y: newY });
+      
     } else {
       // Update cursor based on what's under mouse
       if (canvas && !isDragging && !isResizing) {
