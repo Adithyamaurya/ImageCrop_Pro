@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff, Undo } from 'lucide-react';
+import { X, Settings, ChevronLeft, ChevronRight, RotateCw, Download, Eye, EyeOff, Undo, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface AdvancedCropEditorProps {
@@ -28,6 +28,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
+  const [previewOffset, setPreviewOffset] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
   const [showUncropped, setShowUncropped] = useState(true);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
@@ -36,15 +37,18 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   
   // Canvas coordinate system state
   const [canvasToImageScale, setCanvasToImageScale] = useState({ x: 1, y: 1 });
-  const [imageToCanvasOffset, setImageToCanvasOffset] = useState({ x: 0, y: 0 });
+  const [baseCanvasSize, setBaseCanvasSize] = useState({ width: 0, height: 0 });
   
   // Interaction states
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [originalPosition, setOriginalPosition] = useState({ x: 0, y: 0 });
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
   // Store the original crop state when the editor opens or when switching crops
   useEffect(() => {
@@ -57,42 +61,56 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const canGoPrevious = currentCropIndex > 0;
   const canGoNext = currentCropIndex < allCrops.length - 1;
 
+  // Reset zoom and pan when switching between view modes
+  useEffect(() => {
+    setPreviewScale(1);
+    setPreviewOffset({ x: 0, y: 0 });
+  }, [showUncropped]);
+
   // Convert canvas coordinates to crop coordinates
   const canvasToCropCoords = useCallback((canvasX: number, canvasY: number) => {
     if (showUncropped) {
-      // In context view, convert canvas coords to image coords, then to crop coords
-      const imageX = (canvasX / canvasToImageScale.x);
-      const imageY = (canvasY / canvasToImageScale.y);
+      // Account for zoom and pan in context view
+      const adjustedX = (canvasX - previewOffset.x) / previewScale;
+      const adjustedY = (canvasY - previewOffset.y) / previewScale;
       
-      // Convert from image space to crop space (accounting for current image transform)
+      // Convert to image coordinates
+      const imageX = adjustedX / canvasToImageScale.x;
+      const imageY = adjustedY / canvasToImageScale.y;
+      
+      // Convert from image space to crop space
       const cropX = imageX * imageScale + imageOffset.x;
       const cropY = imageY * imageScale + imageOffset.y;
       
       return { x: cropX, y: cropY };
     } else {
-      // In crop-only view, canvas coords map directly to crop coords
-      const cropX = (canvasX / previewScale);
-      const cropY = (canvasY / previewScale);
+      // In crop-only view, account for zoom and pan
+      const cropX = (canvasX - previewOffset.x) / previewScale;
+      const cropY = (canvasY - previewOffset.y) / previewScale;
       return { x: cropX, y: cropY };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale]);
+  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
 
   // Convert crop coordinates to canvas coordinates
   const cropToCanvasCoords = useCallback((cropX: number, cropY: number) => {
     if (showUncropped) {
-      // Convert crop coords to image coords, then to canvas coords
+      // Convert crop coords to image coords
       const imageX = (cropX - imageOffset.x) / imageScale;
       const imageY = (cropY - imageOffset.y) / imageScale;
       
-      const canvasX = imageX * canvasToImageScale.x;
-      const canvasY = imageY * canvasToImageScale.y;
+      // Convert to canvas coords and apply zoom/pan
+      const canvasX = imageX * canvasToImageScale.x * previewScale + previewOffset.x;
+      const canvasY = imageY * canvasToImageScale.y * previewScale + previewOffset.y;
       
       return { x: canvasX, y: canvasY };
     } else {
-      // In crop-only view, crop coords map directly to canvas coords
-      return { x: cropX * previewScale, y: cropY * previewScale };
+      // In crop-only view, apply zoom and pan
+      return { 
+        x: cropX * previewScale + previewOffset.x, 
+        y: cropY * previewScale + previewOffset.y 
+      };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale]);
+  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
 
   // Check if a point is within the crop area
   const isPointInCrop = useCallback((canvasX: number, canvasY: number) => {
@@ -114,7 +132,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
     const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
     
-    const handleSize = 12;
+    const handleSize = 12 * previewScale; // Scale handle size with zoom
     const tolerance = handleSize / 2;
     
     // Corner and edge handles
@@ -136,7 +154,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
     
     return null;
-  }, [crop, showUncropped, cropToCanvasCoords]);
+  }, [crop, showUncropped, cropToCanvasCoords, previewScale]);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -146,37 +164,37 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Get container dimensions
     const containerRect = container.getBoundingClientRect();
-    const maxWidth = containerRect.width - 40; // Account for padding
+    const maxWidth = containerRect.width - 40;
     const maxHeight = containerRect.height - 40;
 
-    let canvasWidth, canvasHeight;
+    let baseWidth, baseHeight;
     
     if (showUncropped) {
       // Show the full image with crop highlighted
       const imgAspect = originalImage.width / originalImage.height;
       
       if (imgAspect > 1) {
-        canvasWidth = Math.min(maxWidth, originalImage.width * 0.5);
-        canvasHeight = canvasWidth / imgAspect;
+        baseWidth = Math.min(maxWidth, originalImage.width * 0.5);
+        baseHeight = baseWidth / imgAspect;
       } else {
-        canvasHeight = Math.min(maxHeight, originalImage.height * 0.5);
-        canvasWidth = canvasHeight * imgAspect;
+        baseHeight = Math.min(maxHeight, originalImage.height * 0.5);
+        baseWidth = baseHeight * imgAspect;
       }
       
-      // Ensure canvas fits in container
-      if (canvasWidth > maxWidth) {
-        canvasWidth = maxWidth;
-        canvasHeight = canvasWidth / imgAspect;
+      // Ensure base size fits in container
+      if (baseWidth > maxWidth) {
+        baseWidth = maxWidth;
+        baseHeight = baseWidth / imgAspect;
       }
-      if (canvasHeight > maxHeight) {
-        canvasHeight = maxHeight;
-        canvasWidth = canvasHeight * imgAspect;
+      if (baseHeight > maxHeight) {
+        baseHeight = maxHeight;
+        baseWidth = baseHeight * imgAspect;
       }
       
       // Update coordinate transformation scales
       setCanvasToImageScale({
-        x: canvasWidth / originalImage.width,
-        y: canvasHeight / originalImage.height
+        x: baseWidth / originalImage.width,
+        y: baseHeight / originalImage.height
       });
       
     } else {
@@ -184,19 +202,30 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const cropAspect = crop.width / crop.height;
       
       if (cropAspect > 1) {
-        canvasWidth = Math.min(maxWidth, 600);
-        canvasHeight = canvasWidth / cropAspect;
+        baseWidth = Math.min(maxWidth, 600);
+        baseHeight = baseWidth / cropAspect;
       } else {
-        canvasHeight = Math.min(maxHeight, 600);
-        canvasWidth = canvasHeight * cropAspect;
+        baseHeight = Math.min(maxHeight, 600);
+        baseWidth = baseHeight * cropAspect;
       }
     }
+
+    // Store base canvas size
+    setBaseCanvasSize({ width: baseWidth, height: baseHeight });
+
+    // Apply zoom to canvas size
+    const canvasWidth = baseWidth * previewScale;
+    const canvasHeight = baseHeight * previewScale;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply pan offset
+    ctx.save();
+    ctx.translate(previewOffset.x, previewOffset.y);
 
     if (showUncropped) {
       // Draw the full image at reduced opacity
@@ -277,7 +306,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw resize handles
-      const handleSize = 10;
+      const handleSize = 10 * previewScale; // Scale handles with zoom
       const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
       
       ctx.fillStyle = handleColor;
@@ -355,7 +384,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
     }
 
-    // Draw grid overlay if enabled
+    ctx.restore(); // Restore pan offset
+
+    // Draw grid overlay if enabled (after restoring pan offset)
     if (showGrid) {
       ctx.globalAlpha = 1.0;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -409,7 +440,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, imageScale, imageOffset, previewScale, showGrid, showUncropped, isDragging, isResizing]);
+  }, [originalImage, crop, imageScale, imageOffset, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing]);
 
   useEffect(() => {
     if (isOpen) {
@@ -448,6 +479,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       setIsDragging(true);
       setDragStart(pos);
       setOriginalPosition({ x: crop.x, y: crop.y });
+    } else {
+      // Start panning
+      setIsPanning(true);
+      setPanStart(pos);
+      setLastPanOffset(previewOffset);
     }
   };
 
@@ -545,9 +581,19 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       setDragStart(pos);
       setOriginalPosition({ x: newX, y: newY });
       
+    } else if (isPanning) {
+      // Handle panning
+      const deltaX = pos.x - panStart.x;
+      const deltaY = pos.y - panStart.y;
+      
+      setPreviewOffset({
+        x: lastPanOffset.x + deltaX,
+        y: lastPanOffset.y + deltaY
+      });
+      
     } else {
       // Update cursor based on what's under mouse
-      if (canvas && !isDragging && !isResizing) {
+      if (canvas && !isDragging && !isResizing && !isPanning) {
         const handle = getResizeHandle(pos.x, pos.y);
         if (handle) {
           // Set resize cursors
@@ -565,7 +611,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         } else if (isPointInCrop(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
         } else {
-          canvas.style.cursor = 'default';
+          canvas.style.cursor = 'grab';
         }
       }
     }
@@ -574,6 +620,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const handleMouseUp = () => {
     setIsDragging(false);
     setIsResizing(false);
+    setIsPanning(false);
     setResizeHandle(null);
     
     // Reset cursor
@@ -587,12 +634,47 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     // Reset all interaction states when mouse leaves
     setIsDragging(false);
     setIsResizing(false);
+    setIsPanning(false);
     setResizeHandle(null);
     
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.style.cursor = 'default';
     }
+  };
+
+  // Zoom functionality
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    
+    const pos = getMousePos(e);
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.1, Math.min(5, previewScale * delta));
+    
+    // Zoom towards mouse position
+    const newOffset = {
+      x: pos.x - (pos.x - previewOffset.x) * (newScale / previewScale),
+      y: pos.y - (pos.y - previewOffset.y) * (newScale / previewScale)
+    };
+    
+    setPreviewScale(newScale);
+    setPreviewOffset(newOffset);
+  };
+
+  // Zoom controls
+  const zoomIn = () => {
+    const newScale = Math.min(5, previewScale * 1.2);
+    setPreviewScale(newScale);
+  };
+
+  const zoomOut = () => {
+    const newScale = Math.max(0.1, previewScale * 0.8);
+    setPreviewScale(newScale);
+  };
+
+  const resetZoom = () => {
+    setPreviewScale(1);
+    setPreviewOffset({ x: 0, y: 0 });
   };
 
   const handleExport = async () => {
@@ -718,14 +800,48 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 ref={canvasRef}
                 className="max-w-full max-h-full border border-gray-600 rounded"
                 style={{ 
-                  imageRendering: 'pixelated',
+                  imageRendering: previewScale > 2 ? 'pixelated' : 'auto',
+                  cursor: isPanning ? 'grabbing' : 'default'
                 }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
+                onWheel={handleWheel}
               />
                 
+              {/* Zoom Controls Overlay */}
+              <div className="absolute top-4 right-4 flex flex-col space-y-2 bg-black/70 rounded-lg p-2">
+                <button
+                  onClick={zoomIn}
+                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-sm font-bold transition-colors flex items-center justify-center"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={zoomOut}
+                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-sm font-bold transition-colors flex items-center justify-center"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={resetZoom}
+                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-xs font-bold transition-colors flex items-center justify-center"
+                  title="Reset Zoom"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+
+              {/* Zoom Level Indicator */}
+              {previewScale !== 1 && (
+                <div className="absolute top-4 left-4 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                  {Math.round(previewScale * 100)}%
+                </div>
+              )}
+
               {/* Preview Controls Overlay */}
               <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
                 {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
@@ -747,9 +863,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </div>
 
               {/* Interaction Instructions */}
-              {showUncropped && !isDragging && !isResizing && (
-                <div className="absolute top-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  Drag crop • Resize handles • Interactive preview
+              {!isDragging && !isResizing && !isPanning && (
+                <div className="absolute bottom-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                  Scroll to zoom • Drag to pan • Resize handles
                 </div>
               )}
             </div>
@@ -795,22 +911,31 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   </button>
                 </div>
 
-                {/* Zoom Controls */}
+                {/* Enhanced Zoom Controls */}
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => setPreviewScale(Math.max(0.25, previewScale - 0.25))}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
+                    onClick={zoomOut}
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                    title="Zoom Out"
                   >
-                    -
+                    <ZoomOut className="h-3 w-3" />
                   </button>
                   <span className="text-sm text-gray-300 w-16 text-center">
                     {Math.round(previewScale * 100)}%
                   </span>
                   <button
-                    onClick={() => setPreviewScale(Math.min(4, previewScale + 0.25))}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
+                    onClick={zoomIn}
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                    title="Zoom In"
                   >
-                    +
+                    <ZoomIn className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={resetZoom}
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                    title="Reset Zoom"
+                  >
+                    <RotateCcw className="h-3 w-3" />
                   </button>
                 </div>
               </div>
@@ -848,6 +973,45 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <option value="jpeg">jpg</option>
                     <option value="webp">webp</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Zoom Controls Section */}
+              <div className="bg-gray-800 rounded-lg p-3">
+                <h4 className="text-sm font-semibold text-gray-300 mb-3">Zoom & Pan</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Zoom Level</span>
+                    <span className="text-sm text-blue-400">{Math.round(previewScale * 100)}%</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={zoomOut}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-2 text-sm transition-colors flex items-center justify-center"
+                    >
+                      <ZoomOut className="h-4 w-4 mr-1" />
+                      Zoom Out
+                    </button>
+                    <button
+                      onClick={zoomIn}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-2 text-sm transition-colors flex items-center justify-center"
+                    >
+                      <ZoomIn className="h-4 w-4 mr-1" />
+                      Zoom In
+                    </button>
+                  </div>
+                  <button
+                    onClick={resetZoom}
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-2 text-sm transition-colors flex items-center justify-center"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    Reset View
+                  </button>
+                  <div className="text-xs text-gray-400">
+                    • Scroll wheel to zoom<br/>
+                    • Drag empty space to pan<br/>
+                    • Zoom range: 10% - 500%
+                  </div>
                 </div>
               </div>
 
@@ -1025,7 +1189,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     // Apply changes and close
                     onClose();
                   }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 px-4 text-sm transition-colors"
+                  className="flex-1 bg-green-600 hover:green-700 text-white rounded-lg py-2 px-4 text-sm transition-colors"
                 >
                   Apply Changes
                 </button>
