@@ -280,19 +280,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* Precision Features Info */}
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-blue-300 mb-2">Precision Features</h4>
-                <div className="text-xs text-gray-300 space-y-1">
-                  <div>• <strong>Real-time dimensions:</strong> Live size display</div>
-                  <div>• <strong>Pixel grid:</strong> Visible at high zoom levels</div>
-                  <div>• <strong>Smooth handles:</strong> Drag to resize precisely</div>
-                  <div>• <strong>Context view:</strong> See surrounding image</div>
-                  <div>• <strong>Zoom controls:</strong> Up to 1000% magnification</div>
-                  <div>• <strong>Pan support:</strong> Navigate large images</div>
-                </div>
-              </div>
-
               {/* Crop Properties */}
               <div className="space-y-4">
                 <h4 className="text-sm font-semibold text-gray-300">Crop Properties</h4>
