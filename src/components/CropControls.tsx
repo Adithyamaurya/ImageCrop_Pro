@@ -304,20 +304,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
                   </div>
                 </div>
 
-                {/* Preview Info */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Grid Preview</h4>
-                  <div className="text-xs text-gray-400 space-y-1">
-                    <div>• <strong>Total crops:</strong> {gridRows * gridCols}</div>
-                    <div>• <strong>Grid size:</strong> {gridRows} × {gridCols}</div>
-                    <div>• <strong>Crop dimensions:</strong> {gridCropSize} × {gridCropSize}</div>
-                    <div>• <strong>Spacing:</strong> {gridSpacing}px between crops</div>
-                    <div>• <strong>Total width:</strong> {gridCols * gridCropSize + (gridCols - 1) * gridSpacing}px</div>
-                    <div>• <strong>Total height:</strong> {gridRows * gridCropSize + (gridRows - 1) * gridSpacing}px</div>
-                    <div>• <strong>Synchronized editing:</strong> All crops update together</div>
-                  </div>
-                </div>
-
                 {/* Grid Layout Visualization */}
                 <div className="bg-gray-700 rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Layout Preview</h4>
