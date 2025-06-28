@@ -3,87 +3,27 @@ import { ViewportAwareCropCanvas } from './ViewportAwareCropCanvas';
 import { CropControls } from './CropControls';
 import { ExportPanel } from './ExportPanel';
 import { AdvancedCropEditor } from './AdvancedCropEditor';
-import { UndoRedoControls } from './UndoRedoControls';
 import { CropArea } from '../App';
-import { useUndoRedo } from '../hooks/useUndoRedo';
 
 interface CropEditorProps {
   imageUrl: string;
   originalImage: HTMLImageElement | null;
   onReset: () => void;
-  onUndoRedoActionsReady?: (actions: any) => void;
-}
-
-interface EditorState {
-  cropAreas: CropArea[];
-  selectedCropId: string | null;
-  imageScale: number;
-  imageOffset: { x: number; y: number };
 }
 
 export const CropEditor: React.FC<CropEditorProps> = ({ 
   imageUrl, 
   originalImage, 
-  onReset,
-  onUndoRedoActionsReady
+  onReset 
 }) => {
-  const initialState: EditorState = {
-    cropAreas: [],
-    selectedCropId: null,
-    imageScale: 1,
-    imageOffset: { x: 0, y: 0 }
-  };
-
-  const [editorState, undoRedoActions] = useUndoRedo<EditorState>(initialState);
-  const { cropAreas, selectedCropId, imageScale, imageOffset } = editorState;
-
+  const [cropAreas, setCropAreas] = useState<CropArea[]>([]);
+  const [selectedCropId, setSelectedCropId] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [advancedEditingCrop, setAdvancedEditingCrop] = useState<CropArea | null>(null);
   const [editingCropName, setEditingCropName] = useState<string | null>(null);
-
-  // Track if we're in the middle of an interaction to avoid pushing every small change
-  const [isInteracting, setIsInteracting] = useState(false);
-  const interactionTimeoutRef = useRef<NodeJS.Timeout>();
-
-  // Pass undo/redo actions to parent for global shortcuts
-  useEffect(() => {
-    if (onUndoRedoActionsReady) {
-      onUndoRedoActionsReady(undoRedoActions);
-    }
-  }, [undoRedoActions, onUndoRedoActionsReady]);
-
-  // Helper function to update state and manage history
-  const updateEditorState = (updates: Partial<EditorState>, forceHistory = false) => {
-    const newState = { ...editorState, ...updates };
-    
-    if (forceHistory || !isInteracting) {
-      (undoRedoActions as any).forcePush(newState);
-    } else {
-      undoRedoActions.push(newState);
-    }
-  };
-
-  // Debounced function to end interaction and force history push
-  const endInteraction = () => {
-    if (interactionTimeoutRef.current) {
-      clearTimeout(interactionTimeoutRef.current);
-    }
-    
-    interactionTimeoutRef.current = setTimeout(() => {
-      setIsInteracting(false);
-      // Force push the current state to history when interaction ends
-      (undoRedoActions as any).forcePush(editorState);
-    }, 300);
-  };
-
-  // Start interaction (prevents history spam during dragging/resizing)
-  const startInteraction = () => {
-    setIsInteracting(true);
-    if (interactionTimeoutRef.current) {
-      clearTimeout(interactionTimeoutRef.current);
-    }
-  };
 
   // Initialize image position when image loads
   useEffect(() => {
@@ -101,22 +41,13 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       const scaledWidth = originalImage.width * scale;
       const scaledHeight = originalImage.height * scale;
       
-      const newImageState = {
-        imageScale: scale,
-        imageOffset: {
-          x: (canvasSize.width - scaledWidth) / 2,
-          y: (canvasSize.height - scaledHeight) / 2
-        }
-      };
-      
-      updateEditorState(newImageState, true);
+      setImageScale(scale);
+      setImageOffset({
+        x: (canvasSize.width - scaledWidth) / 2,
+        y: (canvasSize.height - scaledHeight) / 2
+      });
     }
   }, [originalImage, canvasSize]);
-
-  // Reset undo/redo history when image changes
-  useEffect(() => {
-    undoRedoActions.reset(initialState);
-  }, [imageUrl]);
 
   const addCropArea = (cropData?: Omit<CropArea, 'id'>) => {
     let newCrop: CropArea;
@@ -148,10 +79,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       };
     }
     
-    updateEditorState({
-      cropAreas: [...cropAreas, newCrop],
-      selectedCropId: newCrop.id
-    }, true);
+    setCropAreas([...cropAreas, newCrop]);
+    setSelectedCropId(newCrop.id);
   };
 
   const addMultipleCrops = (rows: number, cols: number, startX: number, startY: number, cropSize: number = 150, spacing: number = 0) => {
@@ -193,51 +122,50 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
     
     // Add all crops at once
-    updateEditorState({
-      cropAreas: [...cropAreas, ...newCrops],
-      selectedCropId: newCrops.length > 0 ? newCrops[0].id : selectedCropId
-    }, true);
+    setCropAreas(prev => [...prev, ...newCrops]);
+    
+    // Select the first crop in the grid
+    if (newCrops.length > 0) {
+      setSelectedCropId(newCrops[0].id);
+    }
   };
 
   const updateGridCrops = (gridId: string, updates: Partial<CropArea>) => {
-    startInteraction();
-    
-    const updatedCrops = cropAreas.map(crop => {
-      if (crop.gridId === gridId) {
-        const updatedCrop = { ...crop, ...updates };
-        
-        // For grid crops, maintain relative positioning when resizing
-        if (updates.width !== undefined || updates.height !== undefined) {
-          const gridCrops = cropAreas.filter(c => c.gridId === gridId);
-          const firstCrop = gridCrops.find(c => c.gridPosition?.row === 0 && c.gridPosition?.col === 0);
+    setCropAreas(crops => 
+      crops.map(crop => {
+        if (crop.gridId === gridId) {
+          const updatedCrop = { ...crop, ...updates };
           
-          if (firstCrop && crop.gridPosition) {
-            const newWidth = updates.width || crop.width;
-            const newHeight = updates.height || crop.height;
-            const spacing = 0; // No spacing for perfect alignment
+          // For grid crops, maintain relative positioning when resizing
+          if (updates.width !== undefined || updates.height !== undefined) {
+            const gridCrops = crops.filter(c => c.gridId === gridId);
+            const firstCrop = gridCrops.find(c => c.gridPosition?.row === 0 && c.gridPosition?.col === 0);
             
-            updatedCrop.x = firstCrop.x + (crop.gridPosition.col * (newWidth + spacing));
-            updatedCrop.y = firstCrop.y + (crop.gridPosition.row * (newHeight + spacing));
+            if (firstCrop && crop.gridPosition) {
+              const newWidth = updates.width || crop.width;
+              const newHeight = updates.height || crop.height;
+              const spacing = 0; // No spacing for perfect alignment
+              
+              updatedCrop.x = firstCrop.x + (crop.gridPosition.col * (newWidth + spacing));
+              updatedCrop.y = firstCrop.y + (crop.gridPosition.row * (newHeight + spacing));
+            }
           }
+          
+          return updatedCrop;
         }
-        
-        return updatedCrop;
-      }
-      return crop;
-    });
-    
-    updateEditorState({ cropAreas: updatedCrops });
-    endInteraction();
+        return crop;
+      })
+    );
   };
 
   const unlinkFromGrid = (cropId: string) => {
-    const updatedCrops = cropAreas.map(crop => 
-      crop.id === cropId 
-        ? { ...crop, gridId: undefined, gridPosition: undefined }
-        : crop
+    setCropAreas(crops => 
+      crops.map(crop => 
+        crop.id === cropId 
+          ? { ...crop, gridId: undefined, gridPosition: undefined }
+          : crop
+      )
     );
-    
-    updateEditorState({ cropAreas: updatedCrops }, true);
   };
 
   const copyCropStyle = (sourceCropId: string) => {
@@ -267,46 +195,23 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       // Note: Don't copy gridId or gridPosition for individual copies
     };
 
-    updateEditorState({
-      cropAreas: [...cropAreas, newCrop],
-      selectedCropId: newCrop.id
-    }, true);
+    setCropAreas([...cropAreas, newCrop]);
+    setSelectedCropId(newCrop.id);
   };
 
   const updateCropArea = (id: string, updates: Partial<CropArea>) => {
-    startInteraction();
-    
-    const updatedCrops = cropAreas.map(crop => 
-      crop.id === id ? { ...crop, ...updates } : crop
+    setCropAreas(crops => 
+      crops.map(crop => 
+        crop.id === id ? { ...crop, ...updates } : crop
+      )
     );
-    
-    updateEditorState({ cropAreas: updatedCrops });
-    endInteraction();
   };
 
   const deleteCropArea = (id: string) => {
-    const updatedCrops = cropAreas.filter(crop => crop.id !== id);
-    const newSelectedId = selectedCropId === id ? null : selectedCropId;
-    
-    updateEditorState({
-      cropAreas: updatedCrops,
-      selectedCropId: newSelectedId
-    }, true);
-  };
-
-  const selectCrop = (id: string | null) => {
-    updateEditorState({ selectedCropId: id });
-  };
-
-  const handleImageTransform = (transform: { scale: number; offset: { x: number; y: number } }) => {
-    startInteraction();
-    
-    updateEditorState({
-      imageScale: transform.scale,
-      imageOffset: transform.offset
-    });
-    
-    endInteraction();
+    setCropAreas(crops => crops.filter(crop => crop.id !== id));
+    if (selectedCropId === id) {
+      setSelectedCropId(null);
+    }
   };
 
   const handleCropDoubleClick = (cropId: string) => {
@@ -332,12 +237,14 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     const crop = cropAreas.find(c => c.id === cropId);
     if (crop) {
       setAdvancedEditingCrop(crop);
-      selectCrop(cropId);
+      setSelectedCropId(cropId);
     }
   };
 
-  // Context menu handlers
+  // Context menu handlers (removed rename since it's handled in crop controls)
   const handleCropExport = (cropId: string) => {
+    // This would trigger export of a single crop
+    // Implementation would be similar to ExportPanel's cropImage function
     console.log('Export crop:', cropId);
   };
 
@@ -348,22 +255,13 @@ export const CropEditor: React.FC<CropEditorProps> = ({
       <div className="flex h-[calc(100vh-80px)]">
         {/* Left Sidebar - Crop Tools */}
         <div className="w-80 bg-gray-900 border-r border-gray-700 flex flex-col">
-          {/* Undo/Redo Controls */}
-          <UndoRedoControls
-            canUndo={undoRedoActions.canUndo}
-            canRedo={undoRedoActions.canRedo}
-            onUndo={undoRedoActions.undo}
-            onRedo={undoRedoActions.redo}
-            onClearHistory={undoRedoActions.clear}
-          />
-          
           <CropControls
             cropAreas={cropAreas}
             selectedCrop={selectedCrop}
             onAddCrop={() => addCropArea()}
             onUpdateCrop={updateCropArea}
             onDeleteCrop={deleteCropArea}
-            onSelectCrop={selectCrop}
+            onSelectCrop={setSelectedCropId}
             onCopyCropStyle={copyCropStyle}
             onAddMultipleCrops={addMultipleCrops}
             onUpdateGridCrops={updateGridCrops}
@@ -380,12 +278,15 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             originalImage={originalImage}
             cropAreas={cropAreas}
             selectedCropId={selectedCropId}
-            onCropSelect={selectCrop}
+            onCropSelect={setSelectedCropId}
             onCropUpdate={updateCropArea}
             onCropAdd={addCropArea}
             imageScale={imageScale}
             imageOffset={imageOffset}
-            onImageTransform={handleImageTransform}
+            onImageTransform={({ scale, offset }) => {
+              setImageScale(scale);
+              setImageOffset(offset);
+            }}
             onCanvasResize={setCanvasSize}
             onCropDoubleClick={handleCropDoubleClick}
             onUpdateGridCrops={updateGridCrops}
