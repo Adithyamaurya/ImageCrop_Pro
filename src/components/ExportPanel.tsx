@@ -169,7 +169,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
         {/* Export Settings */}
         <div className="bg-gray-800 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center">
@@ -225,7 +225,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
               </button>
             </div>
             
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-64 overflow-y-auto thin-scrollbar">
               {cropAreas.map((crop) => (
                 <div
                   key={crop.id}

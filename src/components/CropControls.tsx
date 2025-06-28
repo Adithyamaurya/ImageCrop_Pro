@@ -144,7 +144,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
   const gridInfo = selectedCrop ? getGridInfo(selectedCrop) : null;
 
   return (
-    <div className="p-4 space-y-6 flex-1 overflow-y-auto">
+    <div className="p-4 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
       {/* Add Crop Buttons */}
       <div className="space-y-3">
         <button
@@ -182,7 +182,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-96 overflow-y-auto modal-scrollbar">
                 {/* Grid Dimensions */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -308,7 +308,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
         {cropAreas.length === 0 ? (
           <p className="text-xs text-gray-500 text-center py-4">No crop areas created yet</p>
         ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="space-y-2 max-h-64 overflow-y-auto thin-scrollbar">
             {cropAreas.map((crop) => (
               <div
                 key={crop.id}
@@ -409,7 +409,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
             </div>
           )}
           
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-96 overflow-y-auto thin-scrollbar">
             {/* Name */}
             <div>
               <label className="block text-xs text-gray-400 mb-1">Name</label>

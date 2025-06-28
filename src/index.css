@@ -1,3 +1,160 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom Scrollbar Styles */
+@layer base {
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1f2937; /* gray-800 */
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4b5563; /* gray-600 */
+    border-radius: 4px;
+    border: 1px solid #374151; /* gray-700 */
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280; /* gray-500 */
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: #9ca3af; /* gray-400 */
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: #1f2937; /* gray-800 */
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1f2937; /* thumb track */
+  }
+
+  /* Custom scrollbar for specific containers */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1f2937;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1f2937;
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 3px;
+    border: 1px solid #374151;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+
+  /* Thin scrollbar variant for compact areas */
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 #111827;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: #111827; /* gray-900 */
+    border-radius: 2px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #374151; /* gray-700 */
+    border-radius: 2px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #4b5563; /* gray-600 */
+  }
+
+  /* Invisible scrollbar for special cases */
+  .invisible-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .invisible-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Smooth scrolling for all elements */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom focus styles to match scrollbar theme */
+  *:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus for elements that have custom focus styles */
+  button:focus,
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+  }
+}
+
+/* Scrollbar animations */
+@layer utilities {
+  .scrollbar-fade-in {
+    transition: opacity 0.2s ease-in-out;
+  }
+
+  .scrollbar-fade-in::-webkit-scrollbar-thumb {
+    transition: background-color 0.2s ease-in-out;
+  }
+
+  /* Hover effects for scrollable containers */
+  .scrollable-container {
+    position: relative;
+  }
+
+  .scrollable-container:hover::-webkit-scrollbar-thumb {
+    background: #6b7280;
+  }
+
+  /* Custom scrollbar for modal/dialog content */
+  .modal-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .modal-scrollbar::-webkit-scrollbar-track {
+    background: #111827;
+    border-radius: 3px;
+  }
+
+  .modal-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 3px;
+  }
+
+  .modal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}

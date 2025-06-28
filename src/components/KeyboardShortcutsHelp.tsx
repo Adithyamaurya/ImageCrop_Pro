@@ -87,7 +87,7 @@ export const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ sh
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto modal-scrollbar p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {sections.map((section) => (
               <div key={section.id} className="bg-gray-800 rounded-lg overflow-hidden">
@@ -109,7 +109,7 @@ export const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ sh
                 
                 {expandedSections.has(section.id) && (
                   <div className="px-4 pb-4">
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-64 overflow-y-auto thin-scrollbar">
                       {section.shortcuts.map((shortcut, index) => (
                         <div key={index} className="flex items-center justify-between py-2 border-b border-gray-700 last:border-b-0">
                           <div className="flex items-center space-x-3">

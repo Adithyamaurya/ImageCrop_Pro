@@ -926,7 +926,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
               {/* Output File Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
