@@ -3,6 +3,8 @@ import { ViewportAwareCropCanvas } from './ViewportAwareCropCanvas';
 import { CropControls } from './CropControls';
 import { ExportPanel } from './ExportPanel';
 import { AdvancedCropEditor } from './AdvancedCropEditor';
+import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { CropArea } from '../App';
 
 interface CropEditorProps {
@@ -24,6 +26,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
   const [advancedEditorOpen, setAdvancedEditorOpen] = useState(false);
   const [advancedEditingCrop, setAdvancedEditingCrop] = useState<CropArea | null>(null);
   const [editingCropName, setEditingCropName] = useState<string | null>(null);
+  const [selectedCrops, setSelectedCrops] = useState<Set<string>>(new Set());
 
   // Initialize image position when image loads
   useEffect(() => {
@@ -212,6 +215,12 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     if (selectedCropId === id) {
       setSelectedCropId(null);
     }
+    // Remove from selected crops if it was selected
+    setSelectedCrops(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
   };
 
   const handleCropDoubleClick = (cropId: string) => {
@@ -241,14 +250,58 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     }
   };
 
-  // Context menu handlers (removed rename since it's handled in crop controls)
+  // Export functions for keyboard shortcuts
+  const handleExportAll = async () => {
+    // This would trigger export of all crops
+    console.log('Export all crops');
+  };
+
+  const handleExportSelected = async () => {
+    // This would trigger export of selected crops
+    console.log('Export selected crops:', Array.from(selectedCrops));
+  };
+
+  // Context menu handlers
   const handleCropExport = (cropId: string) => {
-    // This would trigger export of a single crop
-    // Implementation would be similar to ExportPanel's cropImage function
     console.log('Export crop:', cropId);
   };
 
   const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
+
+  // Set up keyboard shortcuts
+  const { shortcuts } = useKeyboardShortcuts({
+    cropAreas,
+    selectedCropId,
+    onCropSelect: setSelectedCropId,
+    onCropUpdate: updateCropArea,
+    onCropDelete: deleteCropArea,
+    onCropCopy: copyCropStyle,
+    onAddCrop: () => addCropArea(),
+    onCropDoubleClick: handleCropDoubleClick,
+    onUpdateGridCrops: updateGridCrops,
+    onUnlinkFromGrid: unlinkFromGrid,
+    onExportAll: handleExportAll,
+    onExportSelected: handleExportSelected,
+    onReset,
+    isAdvancedEditorOpen: advancedEditorOpen,
+    onCloseAdvancedEditor: () => {
+      setAdvancedEditorOpen(false);
+      setAdvancedEditingCrop(null);
+    }
+  });
+
+  // Handle ? key for help
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '?' && !advancedEditorOpen) {
+        e.preventDefault();
+        // Toggle help - this would be handled by KeyboardShortcutsHelp component
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [advancedEditorOpen]);
 
   return (
     <>
@@ -296,6 +349,20 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onUnlinkFromGrid={unlinkFromGrid}
             onCropExport={handleCropExport}
           />
+
+          {/* Keyboard Shortcuts Indicator */}
+          <div className="absolute top-4 right-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-64">
+            <div className="space-y-1">
+              <div className="font-semibold text-white flex items-center">
+                <span className="mr-2">⌨️</span>
+                Keyboard Shortcuts Active
+              </div>
+              <div>Press <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">?</kbd> for help</div>
+              <div>Use <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Tab</kbd> to navigate crops</div>
+              <div>Use <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Arrow keys</kbd> to move</div>
+              <div>Hold <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Ctrl</kbd> to resize</div>
+            </div>
+          </div>
         </div>
 
         {/* Right Sidebar - Export Panel */}
@@ -327,6 +394,9 @@ export const CropEditor: React.FC<CropEditorProps> = ({
           onSwitchCrop={handleSwitchCrop}
         />
       )}
+
+      {/* Keyboard Shortcuts Help */}
+      <KeyboardShortcutsHelp shortcuts={shortcuts} />
     </>
   );
 };
