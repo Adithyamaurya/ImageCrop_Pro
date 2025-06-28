@@ -303,33 +303,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     />
                   </div>
                 </div>
-
-                {/* Grid Layout Visualization */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-gray-300 mb-2">Layout Preview</h4>
-                  <div 
-                    className="grid mx-auto"
-                    style={{ 
-                      gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-                      gap: `${Math.max(1, gridSpacing / 10)}px`,
-                      maxWidth: '200px'
-                    }}
-                  >
-                    {Array.from({ length: gridRows * gridCols }, (_, index) => {
-                      const row = Math.floor(index / gridCols);
-                      const col = index % gridCols;
-                      return (
-                        <div
-                          key={index}
-                          className="bg-purple-500/30 border border-purple-400 rounded text-xs text-center py-1 px-1"
-                          style={{ aspectRatio: '1' }}
-                        >
-                          {row + 1},{col + 1}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
               <div className="flex space-x-3 mt-6">
