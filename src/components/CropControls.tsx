@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, RotateCw, Grid3X3, Link, Unlink, Brain } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, RotateCw, Grid3X3, Link, Unlink } from 'lucide-react';
 import { CropArea } from '../App';
-import { ContentAwareSuggestions } from './ContentAwareSuggestions';
 
 interface CropControlsProps {
   cropAreas: CropArea[];
@@ -16,10 +15,6 @@ interface CropControlsProps {
   onUnlinkFromGrid: (cropId: string) => void;
   editingCropName: string | null;
   onSetEditingCropName: (cropId: string | null) => void;
-  originalImage: HTMLImageElement | null;
-  imageScale: number;
-  imageOffset: { x: number; y: number };
-  onAddSuggestion: (suggestion: Omit<CropArea, 'id'>) => void;
 }
 
 const ASPECT_RATIOS = [
@@ -43,15 +38,10 @@ export const CropControls: React.FC<CropControlsProps> = ({
   onUpdateGridCrops,
   onUnlinkFromGrid,
   editingCropName,
-  onSetEditingCropName,
-  originalImage,
-  imageScale,
-  imageOffset,
-  onAddSuggestion
+  onSetEditingCropName
 }) => {
   const [tempName, setTempName] = useState('');
   const [showMultipleDialog, setShowMultipleDialog] = useState(false);
-  const [showSmartSuggestions, setShowSmartSuggestions] = useState(false);
   const [gridRows, setGridRows] = useState(2);
   const [gridCols, setGridCols] = useState(2);
   const [gridStartX, setGridStartX] = useState(100);
@@ -173,16 +163,6 @@ export const CropControls: React.FC<CropControlsProps> = ({
           <span>Add Uniform Grid</span>
         </button>
       </div>
-
-      {/* Smart Suggestions */}
-      <ContentAwareSuggestions
-        originalImage={originalImage}
-        onAddSuggestion={onAddSuggestion}
-        imageScale={imageScale}
-        imageOffset={imageOffset}
-        isVisible={showSmartSuggestions}
-        onToggleVisibility={() => setShowSmartSuggestions(!showSmartSuggestions)}
-      />
 
       {/* Multiple Crops Dialog */}
       {showMultipleDialog && (

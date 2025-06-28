@@ -56,7 +56,7 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     let newCrop: CropArea;
     
     if (cropData) {
-      // Use provided crop data (from drag creation or smart suggestions)
+      // Use provided crop data (from drag creation)
       newCrop = {
         ...cropData,
         id: `crop-${Date.now()}`,
@@ -321,10 +321,6 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onUnlinkFromGrid={unlinkFromGrid}
             editingCropName={editingCropName}
             onSetEditingCropName={setEditingCropName}
-            originalImage={originalImage}
-            imageScale={imageScale}
-            imageOffset={imageOffset}
-            onAddSuggestion={addCropArea}
           />
         </div>
 
