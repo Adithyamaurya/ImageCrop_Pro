@@ -809,31 +809,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 onMouseLeave={handleMouseLeave}
                 onWheel={handleWheel}
               />
-                
-              {/* Zoom Controls Overlay */}
-              <div className="absolute top-4 right-4 flex flex-col space-y-2 bg-black/70 rounded-lg p-2">
-                <button
-                  onClick={zoomIn}
-                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-sm font-bold transition-colors flex items-center justify-center"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={zoomOut}
-                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-sm font-bold transition-colors flex items-center justify-center"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={resetZoom}
-                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded text-white text-xs font-bold transition-colors flex items-center justify-center"
-                  title="Reset Zoom"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                </button>
-              </div>
 
               {/* Zoom Level Indicator */}
               {previewScale !== 1 && (
