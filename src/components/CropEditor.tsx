@@ -349,20 +349,6 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             onUnlinkFromGrid={unlinkFromGrid}
             onCropExport={handleCropExport}
           />
-
-          {/* Keyboard Shortcuts Indicator */}
-          <div className="absolute top-4 right-4 bg-gray-800/90 rounded-lg p-3 text-xs text-gray-300 max-w-64">
-            <div className="space-y-1">
-              <div className="font-semibold text-white flex items-center">
-                <span className="mr-2">⌨️</span>
-                Keyboard Shortcuts Active
-              </div>
-              <div>Press <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">?</kbd> for help</div>
-              <div>Use <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Tab</kbd> to navigate crops</div>
-              <div>Use <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Arrow keys</kbd> to move</div>
-              <div>Hold <kbd className="px-1 py-0.5 text-xs bg-gray-700 rounded">Ctrl</kbd> to resize</div>
-            </div>
-          </div>
         </div>
 
         {/* Right Sidebar - Export Panel */}
