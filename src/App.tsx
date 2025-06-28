@@ -21,6 +21,7 @@ export interface CropArea {
 function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
+  const [undoRedoActions, setUndoRedoActions] = useState<any>(null);
 
   const handleImageSelect = (imageUrl: string, image: HTMLImageElement) => {
     setSelectedImage(imageUrl);
@@ -30,11 +31,19 @@ function App() {
   const handleReset = () => {
     setSelectedImage(null);
     setOriginalImage(null);
+    setUndoRedoActions(null);
   };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <Header onReset={handleReset} hasImage={!!selectedImage} />
+      <Header 
+        onReset={handleReset} 
+        hasImage={!!selectedImage}
+        onUndo={undoRedoActions?.undo}
+        onRedo={undoRedoActions?.redo}
+        canUndo={undoRedoActions?.canUndo || false}
+        canRedo={undoRedoActions?.canRedo || false}
+      />
       
       <main className="flex-1">
         {!selectedImage ? (
@@ -46,6 +55,7 @@ function App() {
             imageUrl={selectedImage} 
             originalImage={originalImage}
             onReset={handleReset}
+            onUndoRedoActionsReady={setUndoRedoActions}
           />
         )}
       </main>
