@@ -192,9 +192,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
               {/* Right side - Links */}
               <div className="flex items-center space-x-6 text-gray-400">
                 <a 
-                  href="#" 
+                  href="https://github.com/Adithyamaurya/ImageCrop_Pro" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center space-x-2 hover:text-white transition-colors"
-                  title="View source code"
+                  title="View source code on GitHub"
                 >
                   <Github className="h-4 w-4" />
                   <span>Open Source</span>
