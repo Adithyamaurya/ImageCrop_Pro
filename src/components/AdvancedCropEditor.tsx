@@ -64,11 +64,68 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const canGoPrevious = currentCropIndex > 0;
   const canGoNext = currentCropIndex < allCrops.length - 1;
 
-  // Reset zoom and pan when switching between view modes
+  // Reset zoom and pan when switching between view modes or crops
   useEffect(() => {
     setPreviewScale(1);
     setPreviewOffset({ x: 0, y: 0 });
-  }, [showUncropped]);
+  }, [showUncropped, crop.id]);
+
+  // Calculate image boundaries in canvas coordinates
+  const getImageBounds = useCallback(() => {
+    if (!originalImage || !canvasToImageScale.x) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+
+    if (showUncropped) {
+      // In context view, image bounds are the full canvas image
+      return {
+        x: 0,
+        y: 0,
+        width: originalImage.width * canvasToImageScale.x,
+        height: originalImage.height * canvasToImageScale.y
+      };
+    } else {
+      // In crop-only view, bounds are the entire canvas
+      return {
+        x: 0,
+        y: 0,
+        width: baseCanvasSize.width,
+        height: baseCanvasSize.height
+      };
+    }
+  }, [originalImage, canvasToImageScale, showUncropped, baseCanvasSize]);
+
+  // Constrain crop to image boundaries
+  const constrainCropToImageBounds = useCallback((cropUpdates: Partial<CropArea>) => {
+    if (!originalImage) return cropUpdates;
+
+    const updatedCrop = { ...crop, ...cropUpdates };
+    let constrainedCrop = { ...updatedCrop };
+
+    // Ensure crop doesn't go outside image boundaries
+    constrainedCrop.x = Math.max(0, Math.min(constrainedCrop.x, originalImage.width - constrainedCrop.width));
+    constrainedCrop.y = Math.max(0, Math.min(constrainedCrop.y, originalImage.height - constrainedCrop.height));
+
+    // Ensure crop doesn't become larger than image
+    constrainedCrop.width = Math.min(constrainedCrop.width, originalImage.width - constrainedCrop.x);
+    constrainedCrop.height = Math.min(constrainedCrop.height, originalImage.height - constrainedCrop.y);
+
+    // Ensure minimum crop size
+    const minCropSize = 10;
+    constrainedCrop.width = Math.max(minCropSize, constrainedCrop.width);
+    constrainedCrop.height = Math.max(minCropSize, constrainedCrop.height);
+
+    // Return only the changed properties
+    const changes: Partial<CropArea> = {};
+    Object.keys(cropUpdates).forEach(key => {
+      const typedKey = key as keyof CropArea;
+      if (constrainedCrop[typedKey] !== crop[typedKey]) {
+        (changes as any)[typedKey] = constrainedCrop[typedKey];
+      }
+    });
+
+    return changes;
+  }, [crop, originalImage]);
 
   // Convert canvas coordinates to crop coordinates
   const canvasToCropCoords = useCallback((canvasX: number, canvasY: number) => {
@@ -81,29 +138,21 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const imageX = adjustedX / canvasToImageScale.x;
       const imageY = adjustedY / canvasToImageScale.y;
       
-      // Convert from image space to crop space
-      const cropX = imageX * imageScale + imageOffset.x;
-      const cropY = imageY * imageScale + imageOffset.y;
-      
-      return { x: cropX, y: cropY };
+      return { x: imageX, y: imageY };
     } else {
       // In crop-only view, account for zoom and pan
       const cropX = (canvasX - previewOffset.x) / previewScale;
       const cropY = (canvasY - previewOffset.y) / previewScale;
       return { x: cropX, y: cropY };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
+  }, [showUncropped, canvasToImageScale, previewScale, previewOffset]);
 
   // Convert crop coordinates to canvas coordinates
   const cropToCanvasCoords = useCallback((cropX: number, cropY: number) => {
     if (showUncropped) {
-      // Convert crop coords to image coords
-      const imageX = (cropX - imageOffset.x) / imageScale;
-      const imageY = (cropY - imageOffset.y) / imageScale;
-      
-      // Convert to canvas coords and apply zoom/pan
-      const canvasX = imageX * canvasToImageScale.x * previewScale + previewOffset.x;
-      const canvasY = imageY * canvasToImageScale.y * previewScale + previewOffset.y;
+      // Convert crop coords to canvas coords and apply zoom/pan
+      const canvasX = cropX * canvasToImageScale.x * previewScale + previewOffset.x;
+      const canvasY = cropY * canvasToImageScale.y * previewScale + previewOffset.y;
       
       return { x: canvasX, y: canvasY };
     } else {
@@ -113,7 +162,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         y: cropY * previewScale + previewOffset.y 
       };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
+  }, [showUncropped, canvasToImageScale, previewScale, previewOffset]);
 
   // Check if a point is within the crop area
   const isPointInCrop = useCallback((canvasX: number, canvasY: number) => {
@@ -201,7 +250,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       });
       
     } else {
-      // Show only the crop area
+      // Show only the crop area - fit crop to available space
       const cropAspect = crop.width / crop.height;
       
       if (cropAspect > 1) {
@@ -209,6 +258,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         baseHeight = baseWidth / cropAspect;
       } else {
         baseHeight = Math.min(maxHeight, 600);
+        baseWidth = baseHeight * cropAspect;
+      }
+      
+      // Ensure base size fits in container
+      if (baseWidth > maxWidth) {
+        baseWidth = maxWidth;
+        baseHeight = baseWidth / cropAspect;
+      }
+      if (baseHeight > maxHeight) {
+        baseHeight = maxHeight;
         baseWidth = baseHeight * cropAspect;
       }
     }
@@ -245,17 +304,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const scaleX = canvasWidth / originalImage.width;
       const scaleY = canvasHeight / originalImage.height;
       
-      // Convert crop coordinates from canvas space to image space
-      const cropImageX = (crop.x - imageOffset.x) / imageScale;
-      const cropImageY = (crop.y - imageOffset.y) / imageScale;
-      const cropImageWidth = crop.width / imageScale;
-      const cropImageHeight = crop.height / imageScale;
-      
-      // Scale to canvas coordinates
-      const cropCanvasX = cropImageX * scaleX;
-      const cropCanvasY = cropImageY * scaleY;
-      const cropCanvasWidth = cropImageWidth * scaleX;
-      const cropCanvasHeight = cropImageHeight * scaleY;
+      // Convert crop coordinates to canvas coordinates
+      const cropCanvasX = crop.x * scaleX;
+      const cropCanvasY = crop.y * scaleY;
+      const cropCanvasWidth = crop.width * scaleX;
+      const cropCanvasHeight = crop.height * scaleY;
 
       // Draw the crop area at full opacity
       ctx.globalAlpha = 1.0;
@@ -272,18 +325,18 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Ensure crop coordinates are within image bounds
-      const clampedImageX = Math.max(0, Math.min(cropImageX, originalImage.width));
-      const clampedImageY = Math.max(0, Math.min(cropImageY, originalImage.height));
-      const clampedImageWidth = Math.max(1, Math.min(cropImageWidth, originalImage.width - clampedImageX));
-      const clampedImageHeight = Math.max(1, Math.min(cropImageHeight, originalImage.height - clampedImageY));
+      const clampedX = Math.max(0, Math.min(crop.x, originalImage.width));
+      const clampedY = Math.max(0, Math.min(crop.y, originalImage.height));
+      const clampedWidth = Math.max(1, Math.min(crop.width, originalImage.width - clampedX));
+      const clampedHeight = Math.max(1, Math.min(crop.height, originalImage.height - clampedY));
 
       // Draw the cropped portion at full opacity
       ctx.drawImage(
         originalImage,
-        clampedImageX,
-        clampedImageY,
-        clampedImageWidth,
-        clampedImageHeight,
+        clampedX,
+        clampedY,
+        clampedWidth,
+        clampedHeight,
         cropCanvasX,
         cropCanvasY,
         cropCanvasWidth,
@@ -340,10 +393,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Calculate the actual crop coordinates relative to the original image
-      const imageX = (crop.x - imageOffset.x) / imageScale;
-      const imageY = (crop.y - imageOffset.y) / imageScale;
-      const imageWidth = crop.width / imageScale;
-      const imageHeight = crop.height / imageScale;
+      const imageX = crop.x;
+      const imageY = crop.y;
+      const imageWidth = crop.width;
+      const imageHeight = crop.height;
 
       // Apply rotation if present
       const rotation = crop.rotation || 0;
@@ -443,7 +496,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, imageScale, imageOffset, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isMobile]);
+  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isMobile]);
 
   useEffect(() => {
     if (isOpen) {
@@ -504,7 +557,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const canvas = canvasRef.current;
     
     if (isResizing && resizeHandle) {
-      // Handle resizing
+      // Handle resizing with image boundary constraints
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
@@ -514,42 +567,42 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const cropDeltaX = cropDelta.x - cropOrigin.x;
       const cropDeltaY = cropDelta.y - cropOrigin.y;
       
-      let newCrop = { ...crop };
+      let updates: Partial<CropArea> = {};
       
       switch (resizeHandle) {
         case 'nw':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.x = originalPosition.x + cropDeltaX;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          updates.width = originalSize.width - cropDeltaX;
+          updates.height = originalSize.height - cropDeltaY;
+          updates.x = originalPosition.x + cropDeltaX;
+          updates.y = originalPosition.y + cropDeltaY;
           break;
         case 'ne':
-          newCrop.width = originalSize.width + cropDeltaX;
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          updates.width = originalSize.width + cropDeltaX;
+          updates.height = originalSize.height - cropDeltaY;
+          updates.y = originalPosition.y + cropDeltaY;
           break;
         case 'sw':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.height = originalSize.height + cropDeltaY;
-          newCrop.x = originalPosition.x + cropDeltaX;
+          updates.width = originalSize.width - cropDeltaX;
+          updates.height = originalSize.height + cropDeltaY;
+          updates.x = originalPosition.x + cropDeltaX;
           break;
         case 'se':
-          newCrop.width = originalSize.width + cropDeltaX;
-          newCrop.height = originalSize.height + cropDeltaY;
+          updates.width = originalSize.width + cropDeltaX;
+          updates.height = originalSize.height + cropDeltaY;
           break;
         case 'n':
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          updates.height = originalSize.height - cropDeltaY;
+          updates.y = originalPosition.y + cropDeltaY;
           break;
         case 's':
-          newCrop.height = originalSize.height + cropDeltaY;
+          updates.height = originalSize.height + cropDeltaY;
           break;
         case 'w':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.x = originalPosition.x + cropDeltaX;
+          updates.width = originalSize.width - cropDeltaX;
+          updates.x = originalPosition.x + cropDeltaX;
           break;
         case 'e':
-          newCrop.width = originalSize.width + cropDeltaX;
+          updates.width = originalSize.width + cropDeltaX;
           break;
       }
       
@@ -557,21 +610,23 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       if (crop.aspectRatio && crop.aspectRatio > 0) {
         if (['nw', 'ne', 'sw', 'se'].includes(resizeHandle)) {
           if (resizeHandle === 'nw' || resizeHandle === 'se') {
-            newCrop.height = newCrop.width / crop.aspectRatio;
+            updates.height = (updates.width || crop.width) / crop.aspectRatio;
           } else {
-            newCrop.width = newCrop.height * crop.aspectRatio;
+            updates.width = (updates.height || crop.height) * crop.aspectRatio;
           }
         }
       }
       
       // Ensure minimum size
-      newCrop.width = Math.max(20, newCrop.width);
-      newCrop.height = Math.max(20, newCrop.height);
+      if (updates.width !== undefined) updates.width = Math.max(10, updates.width);
+      if (updates.height !== undefined) updates.height = Math.max(10, updates.height);
       
-      onUpdateCrop(newCrop);
+      // Apply image boundary constraints
+      const constrainedUpdates = constrainCropToImageBounds(updates);
+      onUpdateCrop(constrainedUpdates);
       
     } else if (isDragging) {
-      // Handle dragging
+      // Handle dragging with image boundary constraints
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
@@ -582,16 +637,20 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const cropDeltaY = cropDelta.y - cropOrigin.y;
       
       // Calculate new position
-      const newX = originalPosition.x + cropDeltaX;
-      const newY = originalPosition.y + cropDeltaY;
+      const updates = {
+        x: originalPosition.x + cropDeltaX,
+        y: originalPosition.y + cropDeltaY
+      };
       
-      onUpdateCrop({
-        x: newX,
-        y: newY
-      });
+      // Apply image boundary constraints
+      const constrainedUpdates = constrainCropToImageBounds(updates);
+      onUpdateCrop(constrainedUpdates);
       
       setDragStart(pos);
-      setOriginalPosition({ x: newX, y: newY });
+      setOriginalPosition({ 
+        x: crop.x + (constrainedUpdates.x || 0), 
+        y: crop.y + (constrainedUpdates.y || 0) 
+      });
       
     } else if (isPanning) {
       // Handle panning
@@ -642,19 +701,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   };
 
-  // Mouse event handlers
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    handleStart(e);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    handleMove(e);
-  };
-
-  const handleMouseUp = () => {
-    handleEnd();
-  };
-
   const handleMouseLeave = () => {
     // Reset all interaction states when mouse leaves
     setIsDragging(false);
@@ -684,29 +730,108 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     handleEnd();
   };
 
-  // Zoom functionality
+  // Mouse event handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleStart(e);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleMove(e);
+  };
+
+  const handleMouseUp = () => {
+    handleEnd();
+  };
+
+  // Zoom functionality with crop-focused behavior
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     
     const pos = getEventPos(e);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(5, previewScale * delta));
     
-    // Zoom towards mouse position
+    // Calculate max zoom based on crop size
+    let maxZoom = 5;
+    if (!showUncropped && originalImage) {
+      // In crop-only mode, max zoom is when crop fills the container
+      const container = containerRef.current;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const maxWidth = containerRect.width - 40;
+        const maxHeight = containerRect.height - 40;
+        
+        const cropAspect = crop.width / crop.height;
+        let maxCropDisplayWidth, maxCropDisplayHeight;
+        
+        if (cropAspect > 1) {
+          maxCropDisplayWidth = maxWidth;
+          maxCropDisplayHeight = maxWidth / cropAspect;
+        } else {
+          maxCropDisplayHeight = maxHeight;
+          maxCropDisplayWidth = maxHeight * cropAspect;
+        }
+        
+        // Calculate zoom that would make crop fill container
+        maxZoom = Math.min(
+          maxCropDisplayWidth / baseCanvasSize.width,
+          maxCropDisplayHeight / baseCanvasSize.height
+        ) * 2; // Allow 2x beyond fill
+      }
+    }
+    
+    const newScale = Math.max(0.1, Math.min(maxZoom, previewScale * delta));
+    
+    // Zoom towards mouse position (or crop center in crop-only mode)
+    let zoomCenterX = pos.x;
+    let zoomCenterY = pos.y;
+    
+    if (!showUncropped) {
+      // In crop-only mode, zoom towards crop center
+      zoomCenterX = baseCanvasSize.width / 2;
+      zoomCenterY = baseCanvasSize.height / 2;
+    }
+    
     const newOffset = {
-      x: pos.x - (pos.x - previewOffset.x) * (newScale / previewScale),
-      y: pos.y - (pos.y - previewOffset.y) * (newScale / previewScale)
+      x: zoomCenterX - (zoomCenterX - previewOffset.x) * (newScale / previewScale),
+      y: zoomCenterY - (zoomCenterY - previewOffset.y) * (newScale / previewScale)
     };
     
     setPreviewScale(newScale);
     setPreviewOffset(newOffset);
   };
 
-  // Fixed zoom controls - these were the problem!
+  // Fixed zoom controls with crop-focused behavior
   const zoomIn = () => {
-    const newScale = Math.min(5, previewScale * 1.2);
+    // Calculate max zoom based on crop size
+    let maxZoom = 5;
+    if (!showUncropped && originalImage) {
+      const container = containerRef.current;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const maxWidth = containerRect.width - 40;
+        const maxHeight = containerRect.height - 40;
+        
+        const cropAspect = crop.width / crop.height;
+        let maxCropDisplayWidth, maxCropDisplayHeight;
+        
+        if (cropAspect > 1) {
+          maxCropDisplayWidth = maxWidth;
+          maxCropDisplayHeight = maxWidth / cropAspect;
+        } else {
+          maxCropDisplayHeight = maxHeight;
+          maxCropDisplayWidth = maxHeight * cropAspect;
+        }
+        
+        maxZoom = Math.min(
+          maxCropDisplayWidth / baseCanvasSize.width,
+          maxCropDisplayHeight / baseCanvasSize.height
+        ) * 2;
+      }
+    }
     
-    // Zoom towards center of canvas
+    const newScale = Math.min(maxZoom, previewScale * 1.2);
+    
+    // Zoom towards center of canvas (or crop center)
     const canvas = canvasRef.current;
     if (canvas) {
       const centerX = canvas.width / 2;
@@ -1097,7 +1222,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.width)}
-                      onChange={(e) => onUpdateCrop({ width: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => {
+                        const width = parseInt(e.target.value) || 1;
+                        const updates = constrainCropToImageBounds({ width });
+                        onUpdateCrop(updates);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       min="1"
                     />
@@ -1107,7 +1236,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.height)}
-                      onChange={(e) => onUpdateCrop({ height: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => {
+                        const height = parseInt(e.target.value) || 1;
+                        const updates = constrainCropToImageBounds({ height });
+                        onUpdateCrop(updates);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       min="1"
                     />
@@ -1121,7 +1254,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.x)}
-                      onChange={(e) => onUpdateCrop({ x: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const x = parseInt(e.target.value) || 0;
+                        const updates = constrainCropToImageBounds({ x });
+                        onUpdateCrop(updates);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
@@ -1130,7 +1267,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.y)}
-                      onChange={(e) => onUpdateCrop({ y: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const y = parseInt(e.target.value) || 0;
+                        const updates = constrainCropToImageBounds({ y });
+                        onUpdateCrop(updates);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
