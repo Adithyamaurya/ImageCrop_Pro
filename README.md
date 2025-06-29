@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Live Demo
-[🔗 Visit Live App](#https://elegant-biscotti-cd1425.netlify.app/) 
+[🔗 Visit Live App](https://elegant-biscotti-cd1425.netlify.app/) 
 
 ---
 
