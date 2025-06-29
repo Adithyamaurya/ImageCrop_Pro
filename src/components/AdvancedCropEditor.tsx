@@ -50,12 +50,29 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
+  // Mobile responsive states
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1024);
+
   // Store the original crop state when the editor opens or when switching crops
   useEffect(() => {
     if (isOpen && crop) {
       setOriginalCropState({ ...crop });
     }
   }, [isOpen, crop.id]); // Only reset when crop ID changes or editor opens
+
+  // Handle window resize for mobile responsiveness
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      const shouldCollapse = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      setSidebarCollapsed(shouldCollapse);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const currentCropIndex = allCrops.findIndex(c => c.id === crop.id);
   const canGoPrevious = currentCropIndex > 0;
@@ -124,7 +141,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
     const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
     
-    const handleSize = 12 * previewScale; // Scale handle size with zoom
+    const handleSize = (isMobile ? 16 : 12) * previewScale; // Larger handles on mobile, scale with zoom
     const tolerance = handleSize / 2;
     
     // Corner and edge handles
@@ -146,7 +163,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
     
     return null;
-  }, [crop, showUncropped, imageToCanvasCoords, previewScale]);
+  }, [crop, showUncropped, imageToCanvasCoords, previewScale, isMobile]);
 
   // Constrain crop to image boundaries
   const constrainCropToImage = useCallback((newCrop: CropArea): CropArea => {
@@ -178,8 +195,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Get container dimensions
     const containerRect = container.getBoundingClientRect();
-    const maxWidth = containerRect.width - 40;
-    const maxHeight = containerRect.height - 40;
+    const maxWidth = containerRect.width - (isMobile ? 20 : 40);
+    const maxHeight = containerRect.height - (isMobile ? 20 : 40);
 
     let baseWidth, baseHeight;
     
@@ -188,10 +205,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const imgAspect = originalImage.width / originalImage.height;
       
       if (imgAspect > 1) {
-        baseWidth = Math.min(maxWidth, originalImage.width * 0.5);
+        baseWidth = Math.min(maxWidth, originalImage.width * (isMobile ? 0.3 : 0.5));
         baseHeight = baseWidth / imgAspect;
       } else {
-        baseHeight = Math.min(maxHeight, originalImage.height * 0.5);
+        baseHeight = Math.min(maxHeight, originalImage.height * (isMobile ? 0.3 : 0.5));
         baseWidth = baseHeight * imgAspect;
       }
       
@@ -216,10 +233,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const cropAspect = crop.width / crop.height;
       
       if (cropAspect > 1) {
-        baseWidth = Math.min(maxWidth, 600);
+        baseWidth = Math.min(maxWidth, isMobile ? 400 : 600);
         baseHeight = baseWidth / cropAspect;
       } else {
-        baseHeight = Math.min(maxHeight, 600);
+        baseHeight = Math.min(maxHeight, isMobile ? 400 : 600);
         baseWidth = baseHeight * cropAspect;
       }
     }
@@ -314,7 +331,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw resize handles
-      const handleSize = 10 * previewScale; // Scale handles with zoom
+      const handleSize = (isMobile ? 16 : 10) * previewScale; // Larger handles on mobile, scale with zoom
       const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
       
       ctx.fillStyle = handleColor;
@@ -442,7 +459,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing]);
+  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isMobile]);
 
   useEffect(() => {
     if (isOpen) {
@@ -450,20 +467,32 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   }, [isOpen, drawPreview]);
 
-  // Mouse event handlers
-  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Unified event position getter for mouse and touch
+  const getEventPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
+    
+    if ('touches' in e) {
+      // Touch event
+      const touch = e.touches[0] || e.changedTouches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    } else {
+      // Mouse event
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
+  // Unified start handler for mouse and touch
+  const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const pos = getEventPos(e);
     
     // Check for resize handle first
     const handle = getResizeHandle(pos.x, pos.y);
@@ -489,8 +518,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
+  // Unified move handler for mouse and touch
+  const handleMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const pos = getEventPos(e);
     const canvas = canvasRef.current;
     
     if (isResizing && resizeHandle) {
@@ -603,8 +633,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       });
       
     } else {
-      // Update cursor based on what's under mouse
-      if (canvas && !isDragging && !isResizing && !isPanning) {
+      // Update cursor based on what's under mouse (only for mouse events)
+      if (canvas && !isDragging && !isResizing && !isPanning && !('touches' in e)) {
         const handle = getResizeHandle(pos.x, pos.y);
         if (handle) {
           // Set resize cursors
@@ -628,7 +658,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   };
 
-  const handleMouseUp = () => {
+  // Unified end handler for mouse and touch
+  const handleEnd = () => {
     setIsDragging(false);
     setIsResizing(false);
     setIsPanning(false);
@@ -639,6 +670,35 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     if (canvas) {
       canvas.style.cursor = 'default';
     }
+  };
+
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    handleStart(e);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    handleMove(e);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    handleEnd();
+  };
+
+  // Mouse event handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleStart(e);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleMove(e);
+  };
+
+  const handleMouseUp = () => {
+    handleEnd();
   };
 
   const handleMouseLeave = () => {
@@ -658,7 +718,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.max(0.1, Math.min(5, previewScale * delta));
     
@@ -751,13 +811,17 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4">
+      <div className={`bg-gray-900 rounded-xl shadow-2xl w-full h-full md:h-[90vh] flex flex-col ${
+        isMobile ? 'max-w-full' : 'max-w-6xl'
+      }`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-bold text-white">Advanced Editor</h2>
-            <div className="text-sm text-gray-400">
+        <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-700">
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <h2 className={`font-bold text-white ${isMobile ? 'text-lg' : 'text-xl'}`}>
+              Advanced Editor
+            </h2>
+            <div className="text-xs md:text-sm text-gray-400">
               Crop {currentCropIndex + 1} of {allCrops.length}
             </div>
             {hasChanges && (
@@ -771,45 +835,90 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </div>
             )}
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowUncropped(!showUncropped)}
-              className={`p-2 rounded-lg transition-colors ${
-                showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              title="Toggle uncropped area preview"
-            >
-              {showUncropped ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => setShowGrid(!showGrid)}
-              className={`p-2 rounded-lg transition-colors ${
-                showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              title="Toggle grid"
-            >
-              {showGrid ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
+          <div className="flex items-center space-x-1 md:space-x-2">
+            {!isMobile && (
+              <>
+                <button
+                  onClick={() => setShowUncropped(!showUncropped)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Toggle uncropped area preview"
+                >
+                  {showUncropped ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => setShowGrid(!showGrid)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Toggle grid"
+                >
+                  {showGrid ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
             >
-              <X className="h-5 w-5 text-white" />
+              <X className="h-4 md:h-5 w-4 md:w-5 text-white" />
             </button>
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className={`flex flex-1 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
           {/* Main Preview Area */}
           <div className="flex-1 bg-gray-800 flex flex-col">
+            {/* Mobile View Controls */}
+            {isMobile && (
+              <div className="flex items-center justify-between p-3 border-b border-gray-700">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowUncropped(!showUncropped)}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {showUncropped ? 'Context' : 'Crop Only'}
+                  </button>
+                  <button
+                    onClick={() => setShowGrid(!showGrid)}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    Grid
+                  </button>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={zoomOut}
+                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white transition-colors"
+                  >
+                    <ZoomOut className="h-3 w-3" />
+                  </button>
+                  <span className="text-xs text-gray-300 w-12 text-center">
+                    {Math.round(previewScale * 100)}%
+                  </span>
+                  <button
+                    onClick={zoomIn}
+                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white transition-colors"
+                  >
+                    <ZoomIn className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Preview Canvas */}
             <div 
               ref={containerRef}
-              className="flex-1 flex items-center justify-center p-4 relative bg-gray-700 rounded-lg shadow-lg max-w-full max-h-full overflow-hidden"
+              className="flex-1 flex items-center justify-center p-2 md:p-4 relative bg-gray-700 rounded-lg shadow-lg max-w-full max-h-full overflow-hidden"
             >
               <canvas
                 ref={canvasRef}
-                className="max-w-full max-h-full border border-gray-600 rounded"
+                className="max-w-full max-h-full border border-gray-600 rounded touch-none"
                 style={{ 
                   imageRendering: previewScale > 2 ? 'pixelated' : 'auto',
                   cursor: isPanning ? 'grabbing' : 'default'
@@ -819,17 +928,20 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
                 onWheel={handleWheel}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
               />
 
               {/* Zoom Level Indicator */}
               {previewScale !== 1 && (
-                <div className="absolute top-4 left-4 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                <div className="absolute top-2 md:top-4 left-2 md:left-4 bg-black/70 text-white text-xs px-2 py-1 rounded">
                   {Math.round(previewScale * 100)}%
                 </div>
               )}
 
               {/* Preview Controls Overlay */}
-              <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+              <div className="absolute bottom-1 md:bottom-2 left-1 md:left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
                 {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
                 {crop.rotation && crop.rotation !== 0 && (
                   <span className="ml-2 text-orange-400">
@@ -844,39 +956,39 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </div>
 
               {/* View Mode Indicator */}
-              <div className="absolute top-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+              <div className="absolute top-1 md:top-2 right-1 md:right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
                 {showUncropped ? 'Context View' : 'Crop Only'}
               </div>
 
               {/* Interaction Instructions */}
               {!isDragging && !isResizing && !isPanning && (
-                <div className="absolute bottom-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  Scroll to zoom • Drag to pan • Resize handles • Constrained to image
+                <div className="absolute bottom-1 md:bottom-2 right-1 md:right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                  {isMobile ? 'Pinch to zoom • Drag to pan' : 'Scroll to zoom • Drag to pan • Resize handles • Constrained to image'}
                 </div>
               )}
             </div>
 
             {/* Crop Navigation Controls */}
-            <div className="bg-gray-900 p-4 border-t border-gray-700">
+            <div className="bg-gray-900 p-2 md:p-4 border-t border-gray-700">
               <div className="flex items-center justify-between">
                 {/* Crop Navigation */}
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2 md:space-x-4">
                   <button
                     onClick={goToPreviousCrop}
                     disabled={!canGoPrevious}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                    className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-4 py-2 rounded-lg transition-colors text-sm ${
                       canGoPrevious 
                         ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                         : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
                     title="Previous crop"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                    <span>Previous</span>
+                    <ChevronLeft className="h-3 md:h-4 w-3 md:w-4" />
+                    <span className="hidden md:inline">Previous</span>
                   </button>
                   
                   <div className="text-center">
-                    <div className="text-white font-medium">{crop.name}</div>
+                    <div className="text-white font-medium text-sm md:text-base">{crop.name}</div>
                     <div className="text-xs text-gray-400">
                       {currentCropIndex + 1} of {allCrops.length}
                     </div>
@@ -885,59 +997,63 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   <button
                     onClick={goToNextCrop}
                     disabled={!canGoNext}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                    className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-4 py-2 rounded-lg transition-colors text-sm ${
                       canGoNext 
                         ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                         : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
                     title="Next crop"
                   >
-                    <span>Next</span>
-                    <ChevronRight className="h-4 w-4" />
+                    <span className="hidden md:inline">Next</span>
+                    <ChevronRight className="h-3 md:h-4 w-3 md:w-4" />
                   </button>
                 </div>
 
-                {/* Enhanced Zoom Controls */}
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={zoomOut}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
-                    title="Zoom Out"
-                  >
-                    <ZoomOut className="h-3 w-3" />
-                  </button>
-                  <span className="text-sm text-gray-300 w-16 text-center">
-                    {Math.round(previewScale * 100)}%
-                  </span>
-                  <button
-                    onClick={zoomIn}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
-                    title="Zoom In"
-                  >
-                    <ZoomIn className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={resetZoom}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
-                    title="Reset Zoom"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                  </button>
-                </div>
+                {/* Enhanced Zoom Controls - Desktop Only */}
+                {!isMobile && (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={zoomOut}
+                      className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut className="h-3 w-3" />
+                    </button>
+                    <span className="text-sm text-gray-300 w-16 text-center">
+                      {Math.round(previewScale * 100)}%
+                    </span>
+                    <button
+                      onClick={zoomIn}
+                      className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                      title="Zoom In"
+                    >
+                      <ZoomIn className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={resetZoom}
+                      className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center"
+                      title="Reset Zoom"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Right Sidebar - Settings */}
-          <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
-            <div className="p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white flex items-center">
-                <Settings className="h-5 w-5 mr-2" />
+          <div className={`bg-gray-900 border-l border-gray-700 flex flex-col ${
+            isMobile ? 'w-full max-h-80' : sidebarCollapsed ? 'w-64' : 'w-80'
+          }`}>
+            <div className="p-3 md:p-4 border-b border-gray-700">
+              <h3 className={`font-semibold text-white flex items-center ${isMobile ? 'text-base' : 'text-lg'}`}>
+                <Settings className="h-4 md:h-5 w-4 md:w-5 mr-2" />
                 Settings
               </h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-4 space-y-4 md:space-y-6">
               {/* Output File Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -962,42 +1078,44 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* View Options */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300">Show uncropped area</span>
-                  <button
-                    onClick={() => setShowUncropped(!showUncropped)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      showUncropped ? 'bg-purple-600' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        showUncropped ? 'translate-x-6' : 'translate-x-1'
+              {/* Mobile View Options */}
+              {isMobile && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Show uncropped area</span>
+                    <button
+                      onClick={() => setShowUncropped(!showUncropped)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showUncropped ? 'bg-purple-600' : 'bg-gray-600'
                       }`}
-                    />
-                  </button>
-                </div>
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          showUncropped ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-300">Show grid</span>
-                  <button
-                    onClick={() => setShowGrid(!showGrid)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      showGrid ? 'bg-blue-600' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        showGrid ? 'translate-x-6' : 'translate-x-1'
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Show grid</span>
+                    <button
+                      onClick={() => setShowGrid(!showGrid)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showGrid ? 'bg-blue-600' : 'bg-gray-600'
                       }`}
-                    />
-                  </button>
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          showGrid ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Crop Properties */}
               <div className="space-y-4">
@@ -1148,7 +1266,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             </div>
 
             {/* Bottom Actions */}
-            <div className="p-4 border-t border-gray-700 space-y-3">
+            <div className="p-3 md:p-4 border-t border-gray-700 space-y-3">
               <button
                 onClick={handleExport}
                 className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 px-4 font-medium transition-colors"
