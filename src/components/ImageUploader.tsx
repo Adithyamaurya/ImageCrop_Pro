@@ -61,8 +61,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 flex flex-col min-h-[calc(100vh-160px)] relative">
-      {/* Bolt.new Logo - Top Right with improved positioning */}
-      <div className="absolute -top-4 -right-4 sm:-top-6 sm:-right-6 md:-top-8 md:-right-8 lg:-top-10 lg:-right-10 z-20">
+      {/* Bolt.new Logo - Top Right with proper viewport constraints */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-8 md:right-8 lg:top-10 lg:right-10 z-20">
         <a
           href="https://bolt.new"
           target="_blank"
@@ -74,7 +74,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
             <img
               src="/white_circle_360x360.png"
               alt="Powered by Bolt.new"
-              className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 xl:w-32 xl:h-32 
+              className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 xl:w-28 xl:h-28 
                          transition-all duration-300 group-hover:drop-shadow-lg"
             />
             {/* Subtle glow effect on hover */}
@@ -84,7 +84,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
         </a>
       </div>
 
-      <div className="flex-1 mt-8 sm:mt-12 md:mt-16">
+      <div className="flex-1 mt-8 sm:mt-12 md:mt-16 lg:mt-20">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-white mb-4">Upload Your Image</h2>
           <p className="text-gray-400 text-lg">
