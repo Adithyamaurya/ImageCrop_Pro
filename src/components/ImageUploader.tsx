@@ -61,8 +61,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 flex flex-col min-h-[calc(100vh-160px)] relative">
-      {/* Bolt.new Logo - Moved higher up with negative top margins */}
-      <div className="absolute -top-2 right-4 sm:-top-4 sm:right-6 md:-top-6 md:right-8 lg:-top-8 lg:right-10 z-20">
+      {/* Bolt.new Logo - Moved even higher up with increased negative top margins */}
+      <div className="absolute -top-6 right-4 sm:-top-8 sm:right-6 md:-top-12 md:right-8 lg:-top-16 lg:right-10 z-20">
         <a
           href="https://bolt.new"
           target="_blank"
