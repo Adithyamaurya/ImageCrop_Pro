@@ -67,8 +67,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     setPreviewOffset({ x: 0, y: 0 });
   }, [showUncropped]);
 
-  // Convert canvas coordinates to crop coordinates
-  const canvasToCropCoords = useCallback((canvasX: number, canvasY: number) => {
+  // Convert canvas coordinates to image coordinates (for the advanced editor)
+  const canvasToImageCoords = useCallback((canvasX: number, canvasY: number) => {
     if (showUncropped) {
       // Account for zoom and pan in context view
       const adjustedX = (canvasX - previewOffset.x) / previewScale;
@@ -78,26 +78,18 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const imageX = adjustedX / canvasToImageScale.x;
       const imageY = adjustedY / canvasToImageScale.y;
       
-      // Convert from image space to crop space
-      const cropX = imageX * imageScale + imageOffset.x;
-      const cropY = imageY * imageScale + imageOffset.y;
-      
-      return { x: cropX, y: cropY };
+      return { x: imageX, y: imageY };
     } else {
       // In crop-only view, account for zoom and pan
-      const cropX = (canvasX - previewOffset.x) / previewScale;
-      const cropY = (canvasY - previewOffset.y) / previewScale;
-      return { x: cropX, y: cropY };
+      const imageX = (canvasX - previewOffset.x) / previewScale;
+      const imageY = (canvasY - previewOffset.y) / previewScale;
+      return { x: imageX, y: imageY };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
+  }, [showUncropped, canvasToImageScale, previewScale, previewOffset]);
 
-  // Convert crop coordinates to canvas coordinates
-  const cropToCanvasCoords = useCallback((cropX: number, cropY: number) => {
+  // Convert image coordinates to canvas coordinates (for the advanced editor)
+  const imageToCanvasCoords = useCallback((imageX: number, imageY: number) => {
     if (showUncropped) {
-      // Convert crop coords to image coords
-      const imageX = (cropX - imageOffset.x) / imageScale;
-      const imageY = (cropY - imageOffset.y) / imageScale;
-      
       // Convert to canvas coords and apply zoom/pan
       const canvasX = imageX * canvasToImageScale.x * previewScale + previewOffset.x;
       const canvasY = imageY * canvasToImageScale.y * previewScale + previewOffset.y;
@@ -106,29 +98,29 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     } else {
       // In crop-only view, apply zoom and pan
       return { 
-        x: cropX * previewScale + previewOffset.x, 
-        y: cropY * previewScale + previewOffset.y 
+        x: imageX * previewScale + previewOffset.x, 
+        y: imageY * previewScale + previewOffset.y 
       };
     }
-  }, [showUncropped, canvasToImageScale, imageScale, imageOffset, previewScale, previewOffset]);
+  }, [showUncropped, canvasToImageScale, previewScale, previewOffset]);
 
   // Check if a point is within the crop area
   const isPointInCrop = useCallback((canvasX: number, canvasY: number) => {
     if (!showUncropped) return true; // In crop-only mode, entire canvas is draggable
     
-    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const cropCanvas = imageToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
     
     return canvasX >= cropCanvas.x && canvasX <= cropCanvasEnd.x &&
            canvasY >= cropCanvas.y && canvasY <= cropCanvasEnd.y;
-  }, [crop, showUncropped, cropToCanvasCoords]);
+  }, [crop, showUncropped, imageToCanvasCoords]);
 
   // Get resize handle at position
   const getResizeHandle = useCallback((canvasX: number, canvasY: number) => {
     if (!showUncropped) return null;
     
-    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const cropCanvas = imageToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
     const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
     const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
     
@@ -154,7 +146,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
     
     return null;
-  }, [crop, showUncropped, cropToCanvasCoords, previewScale]);
+  }, [crop, showUncropped, imageToCanvasCoords, previewScale]);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -242,17 +234,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const scaleX = canvasWidth / originalImage.width;
       const scaleY = canvasHeight / originalImage.height;
       
-      // Convert crop coordinates from canvas space to image space
-      const cropImageX = (crop.x - imageOffset.x) / imageScale;
-      const cropImageY = (crop.y - imageOffset.y) / imageScale;
-      const cropImageWidth = crop.width / imageScale;
-      const cropImageHeight = crop.height / imageScale;
-      
-      // Scale to canvas coordinates
-      const cropCanvasX = cropImageX * scaleX;
-      const cropCanvasY = cropImageY * scaleY;
-      const cropCanvasWidth = cropImageWidth * scaleX;
-      const cropCanvasHeight = cropImageHeight * scaleY;
+      // Use crop coordinates directly (they're already in image space)
+      const cropCanvasX = crop.x * scaleX;
+      const cropCanvasY = crop.y * scaleY;
+      const cropCanvasWidth = crop.width * scaleX;
+      const cropCanvasHeight = crop.height * scaleY;
 
       // Draw the crop area at full opacity
       ctx.globalAlpha = 1.0;
@@ -269,10 +255,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Ensure crop coordinates are within image bounds
-      const clampedImageX = Math.max(0, Math.min(cropImageX, originalImage.width));
-      const clampedImageY = Math.max(0, Math.min(cropImageY, originalImage.height));
-      const clampedImageWidth = Math.max(1, Math.min(cropImageWidth, originalImage.width - clampedImageX));
-      const clampedImageHeight = Math.max(1, Math.min(cropImageHeight, originalImage.height - clampedImageY));
+      const clampedImageX = Math.max(0, Math.min(crop.x, originalImage.width));
+      const clampedImageY = Math.max(0, Math.min(crop.y, originalImage.height));
+      const clampedImageWidth = Math.max(1, Math.min(crop.width, originalImage.width - clampedImageX));
+      const clampedImageHeight = Math.max(1, Math.min(crop.height, originalImage.height - clampedImageY));
 
       // Draw the cropped portion at full opacity
       ctx.drawImage(
@@ -336,12 +322,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Calculate the actual crop coordinates relative to the original image
-      const imageX = (crop.x - imageOffset.x) / imageScale;
-      const imageY = (crop.y - imageOffset.y) / imageScale;
-      const imageWidth = crop.width / imageScale;
-      const imageHeight = crop.height / imageScale;
-
       // Apply rotation if present
       const rotation = crop.rotation || 0;
       if (rotation !== 0) {
@@ -352,10 +332,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Ensure crop is within image bounds
-      const cropX = Math.max(0, Math.min(imageX, originalImage.width));
-      const cropY = Math.max(0, Math.min(imageY, originalImage.height));
-      const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
-      const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
+      const cropX = Math.max(0, Math.min(crop.x, originalImage.width));
+      const cropY = Math.max(0, Math.min(crop.y, originalImage.height));
+      const cropWidth = Math.max(1, Math.min(crop.width, originalImage.width - cropX));
+      const cropHeight = Math.max(1, Math.min(crop.height, originalImage.height - cropY));
 
       // Draw the cropped portion
       ctx.drawImage(
@@ -440,7 +420,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, imageScale, imageOffset, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing]);
+  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing]);
 
   useEffect(() => {
     if (isOpen) {
@@ -496,48 +476,48 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
-      // Convert canvas deltas to crop coordinate deltas
-      const cropDelta = canvasToCropCoords(deltaX, deltaY);
-      const cropOrigin = canvasToCropCoords(0, 0);
-      const cropDeltaX = cropDelta.x - cropOrigin.x;
-      const cropDeltaY = cropDelta.y - cropOrigin.y;
+      // Convert canvas deltas to image coordinate deltas
+      const imageDelta = canvasToImageCoords(deltaX, deltaY);
+      const imageOrigin = canvasToImageCoords(0, 0);
+      const imageDeltaX = imageDelta.x - imageOrigin.x;
+      const imageDeltaY = imageDelta.y - imageOrigin.y;
       
       let newCrop = { ...crop };
       
       switch (resizeHandle) {
         case 'nw':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.x = originalPosition.x + cropDeltaX;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.x = originalPosition.x + imageDeltaX;
+          newCrop.y = originalPosition.y + imageDeltaY;
           break;
         case 'ne':
-          newCrop.width = originalSize.width + cropDeltaX;
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          newCrop.width = originalSize.width + imageDeltaX;
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.y = originalPosition.y + imageDeltaY;
           break;
         case 'sw':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.height = originalSize.height + cropDeltaY;
-          newCrop.x = originalPosition.x + cropDeltaX;
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.height = originalSize.height + imageDeltaY;
+          newCrop.x = originalPosition.x + imageDeltaX;
           break;
         case 'se':
-          newCrop.width = originalSize.width + cropDeltaX;
-          newCrop.height = originalSize.height + cropDeltaY;
+          newCrop.width = originalSize.width + imageDeltaX;
+          newCrop.height = originalSize.height + imageDeltaY;
           break;
         case 'n':
-          newCrop.height = originalSize.height - cropDeltaY;
-          newCrop.y = originalPosition.y + cropDeltaY;
+          newCrop.height = originalSize.height - imageDeltaY;
+          newCrop.y = originalPosition.y + imageDeltaY;
           break;
         case 's':
-          newCrop.height = originalSize.height + cropDeltaY;
+          newCrop.height = originalSize.height + imageDeltaY;
           break;
         case 'w':
-          newCrop.width = originalSize.width - cropDeltaX;
-          newCrop.x = originalPosition.x + cropDeltaX;
+          newCrop.width = originalSize.width - imageDeltaX;
+          newCrop.x = originalPosition.x + imageDeltaX;
           break;
         case 'e':
-          newCrop.width = originalSize.width + cropDeltaX;
+          newCrop.width = originalSize.width + imageDeltaX;
           break;
       }
       
@@ -563,15 +543,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
       
-      // Convert canvas delta to crop coordinates
-      const cropDelta = canvasToCropCoords(deltaX, deltaY);
-      const cropOrigin = canvasToCropCoords(0, 0);
-      const cropDeltaX = cropDelta.x - cropOrigin.x;
-      const cropDeltaY = cropDelta.y - cropOrigin.y;
+      // Convert canvas delta to image coordinates
+      const imageDelta = canvasToImageCoords(deltaX, deltaY);
+      const imageOrigin = canvasToImageCoords(0, 0);
+      const imageDeltaX = imageDelta.x - imageOrigin.x;
+      const imageDeltaY = imageDelta.y - imageOrigin.y;
       
       // Calculate new position
-      const newX = originalPosition.x + cropDeltaX;
-      const newY = originalPosition.y + cropDeltaY;
+      const newX = originalPosition.x + imageDeltaX;
+      const newY = originalPosition.y + imageDeltaY;
       
       onUpdateCrop({
         x: newX,
