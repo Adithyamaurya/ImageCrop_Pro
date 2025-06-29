@@ -43,12 +43,10 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [isRotating, setIsRotating] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [originalPosition, setOriginalPosition] = useState({ x: 0, y: 0 });
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
-  const [originalRotation, setOriginalRotation] = useState(0);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
@@ -83,12 +81,12 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       return { x: imageX, y: imageY };
     } else {
       // In crop-only view, account for zoom and pan
-      const cropX = (canvasX - previewOffset.x) / previewScale;
-      const cropY = (canvasY - previewOffset.y) / previewScale;
+      const adjustedX = (canvasX - previewOffset.x) / previewScale;
+      const adjustedY = (canvasY - previewOffset.y) / previewScale;
       
       // Convert from crop preview coordinates to actual crop coordinates
-      const imageX = (cropX / baseCanvasSize.width) * crop.width + crop.x;
-      const imageY = (cropY / baseCanvasSize.height) * crop.height + crop.y;
+      const imageX = (adjustedX / baseCanvasSize.width) * crop.width + crop.x;
+      const imageY = (adjustedY / baseCanvasSize.height) * crop.height + crop.y;
       
       return { x: imageX, y: imageY };
     }
@@ -157,45 +155,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     
     return null;
   }, [crop, showUncropped, cropToCanvasCoords, previewScale]);
-
-  // Get rotation handle at position
-  const getRotationHandle = useCallback((canvasX: number, canvasY: number) => {
-    if (!showUncropped) return null;
-    
-    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-    const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
-    const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
-    
-    const handleSize = 16 * previewScale; // Scale handle size with zoom
-    const rotationHandleDistance = 30 * previewScale;
-    
-    const centerX = cropCanvas.x + cropCanvasWidth / 2;
-    const centerY = cropCanvas.y + cropCanvasHeight / 2;
-    
-    // Apply current rotation to find the actual rotation handle position
-    const rotation = crop.rotation || 0;
-    const cos = Math.cos((rotation * Math.PI) / 180);
-    const sin = Math.sin((rotation * Math.PI) / 180);
-    
-    const dx = 0;
-    const dy = -rotationHandleDistance;
-    const rotationHandleX = centerX + dx * cos - dy * sin;
-    const rotationHandleY = centerY + dx * sin + dy * cos;
-    
-    const distance = Math.sqrt(
-      Math.pow(canvasX - rotationHandleX, 2) + Math.pow(canvasY - rotationHandleY, 2)
-    );
-    
-    return distance <= handleSize / 2 ? 'rotate' : null;
-  }, [crop, showUncropped, cropToCanvasCoords, previewScale]);
-
-  // Calculate angle from center to point
-  const calculateAngleFromCenter = useCallback((centerX: number, centerY: number, pointX: number, pointY: number) => {
-    const angle = Math.atan2(pointY - centerY, pointX - centerX);
-    const degrees = (angle * 180) / Math.PI + 90; // Add 90 to make 0 degrees point up
-    return ((degrees % 360) + 360) % 360; // Normalize to 0-360 range
-  }, []);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -327,8 +286,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Draw crop area border
-      const borderColor = (isDragging || isResizing || isRotating) ? '#F59E0B' : '#3B82F6';
-      const borderWidth = (isDragging || isResizing || isRotating) ? 3 : 2;
+      const borderColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
+      const borderWidth = (isDragging || isResizing) ? 3 : 2;
       
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
@@ -336,13 +295,13 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw crop area overlay
-      const overlayOpacity = (isDragging || isResizing || isRotating) ? 0.15 : 0.08;
+      const overlayOpacity = (isDragging || isResizing) ? 0.15 : 0.08;
       ctx.fillStyle = `rgba(59, 130, 246, ${overlayOpacity})`;
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw resize handles
       const handleSize = 10 * previewScale; // Scale handles with zoom
-      const handleColor = (isDragging || isResizing || isRotating) ? '#F59E0B' : '#3B82F6';
+      const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
       
       ctx.fillStyle = handleColor;
       ctx.strokeStyle = '#FFFFFF';
@@ -365,52 +324,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
         ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
       });
-
-      // Draw rotation handle
-      const rotationHandleDistance = 30 * previewScale;
-      const rotationHandleSize = 8 * previewScale;
-      
-      // Apply rotation to find the actual rotation handle position
-      const cos = Math.cos((rotation * Math.PI) / 180);
-      const sin = Math.sin((rotation * Math.PI) / 180);
-      
-      const dx = 0;
-      const dy = -rotationHandleDistance;
-      const rotationHandleX = centerX + dx * cos - dy * sin;
-      const rotationHandleY = centerY + dx * sin + dy * cos;
-      
-      // Draw line from crop to rotation handle
-      ctx.strokeStyle = handleColor;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(centerX, cropCanvasY);
-      ctx.lineTo(rotationHandleX, rotationHandleY);
-      ctx.stroke();
-      
-      // Draw rotation handle (circle)
-      ctx.setLineDash([]);
-      ctx.fillStyle = isRotating ? '#F59E0B' : '#F59E0B';
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(rotationHandleX, rotationHandleY, rotationHandleSize + 2, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.stroke();
-      
-      // Draw rotation icon (curved arrow)
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(rotationHandleX, rotationHandleY, 4, -Math.PI/2, Math.PI/2);
-      ctx.stroke();
-      // Arrow head
-      ctx.beginPath();
-      ctx.moveTo(rotationHandleX + 2, rotationHandleY + 4);
-      ctx.lineTo(rotationHandleX + 4, rotationHandleY + 2);
-      ctx.lineTo(rotationHandleX + 4, rotationHandleY + 6);
-      ctx.closePath();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fill();
 
     } else {
       // Show only the crop area (crop-only mode)
@@ -450,7 +363,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Add border for crop-only mode
-      if (isDragging || isResizing || isRotating) {
+      if (isDragging || isResizing) {
         ctx.strokeStyle = '#F59E0B';
         ctx.lineWidth = 3;
         ctx.setLineDash([6, 3]);
@@ -515,7 +428,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isRotating]);
+  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing]);
 
   useEffect(() => {
     if (isOpen) {
@@ -538,16 +451,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
     
-    // Check for rotation handle first
-    const rotationHandle = getRotationHandle(pos.x, pos.y);
-    if (rotationHandle) {
-      setIsRotating(true);
-      setDragStart(pos);
-      setOriginalRotation(crop.rotation || 0);
-      return;
-    }
-    
-    // Check for resize handle
+    // Check for resize handle first
     const handle = getResizeHandle(pos.x, pos.y);
     if (handle) {
       setIsResizing(true);
@@ -575,36 +479,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const pos = getMousePos(e);
     const canvas = canvasRef.current;
     
-    if (isRotating) {
-      // Handle rotation
-      if (showUncropped) {
-        const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
-        const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-        const centerX = cropCanvas.x + (cropCanvasEnd.x - cropCanvas.x) / 2;
-        const centerY = cropCanvas.y + (cropCanvasEnd.y - cropCanvas.y) / 2;
-        
-        const startAngle = calculateAngleFromCenter(centerX, centerY, dragStart.x, dragStart.y);
-        const currentAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
-        
-        let angleDiff = currentAngle - startAngle;
-        
-        // Handle angle wrapping
-        if (angleDiff > 180) angleDiff -= 360;
-        if (angleDiff < -180) angleDiff += 360;
-        
-        let newRotation = originalRotation + angleDiff;
-        
-        // Snap to 15-degree increments when holding Shift
-        if (e.shiftKey) {
-          newRotation = Math.round(newRotation / 15) * 15;
-        }
-        
-        // Normalize angle to 0-360 range
-        newRotation = ((newRotation % 360) + 360) % 360;
-        
-        onUpdateCrop({ rotation: newRotation });
-      }
-    } else if (isResizing && resizeHandle) {
+    if (isResizing && resizeHandle) {
       // Handle resizing
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
@@ -723,13 +598,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       
     } else {
       // Update cursor based on what's under mouse
-      if (canvas && !isDragging && !isResizing && !isPanning && !isRotating) {
-        const rotationHandle = getRotationHandle(pos.x, pos.y);
-        const resizeHandle = getResizeHandle(pos.x, pos.y);
-        
-        if (rotationHandle) {
-          canvas.style.cursor = 'grab';
-        } else if (resizeHandle) {
+      if (canvas && !isDragging && !isResizing && !isPanning) {
+        const handle = getResizeHandle(pos.x, pos.y);
+        if (handle) {
           // Set resize cursors
           const cursorMap: { [key: string]: string } = {
             'nw': 'nw-resize',
@@ -741,7 +612,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             'w': 'w-resize',
             'e': 'e-resize'
           };
-          canvas.style.cursor = cursorMap[resizeHandle] || 'default';
+          canvas.style.cursor = cursorMap[handle] || 'default';
         } else if (isPointInCrop(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
         } else {
@@ -755,7 +626,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     setIsDragging(false);
     setIsResizing(false);
     setIsPanning(false);
-    setIsRotating(false);
     setResizeHandle(null);
     
     // Reset cursor
@@ -770,7 +640,6 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     setIsDragging(false);
     setIsResizing(false);
     setIsPanning(false);
-    setIsRotating(false);
     setResizeHandle(null);
     
     const canvas = canvasRef.current;
@@ -877,56 +746,78 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+      <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col lg:flex-row">
+        {/* Header - Mobile */}
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-bold text-white">Advanced Editor</h2>
+            <h2 className="text-lg font-bold text-white">Advanced Editor</h2>
             <div className="text-sm text-gray-400">
-              Crop {currentCropIndex + 1} of {allCrops.length}
+              {currentCropIndex + 1} of {allCrops.length}
             </div>
             {hasChanges && (
               <div className="text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded">
                 Modified
               </div>
             )}
-            {(isDragging || isResizing || isRotating) && (
-              <div className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded animate-pulse">
-                {isDragging ? 'Moving' : isResizing ? 'Resizing' : 'Rotating'}
-              </div>
-            )}
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowUncropped(!showUncropped)}
-              className={`p-2 rounded-lg transition-colors ${
-                showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              title="Toggle uncropped area preview"
-            >
-              {showUncropped ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => setShowGrid(!showGrid)}
-              className={`p-2 rounded-lg transition-colors ${
-                showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              title="Toggle grid"
-            >
-              {showGrid ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-            >
-              <X className="h-5 w-5 text-white" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+          >
+            <X className="h-5 w-5 text-white" />
+          </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Main Preview Area */}
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col lg:flex-row">
+          {/* Preview Area */}
           <div className="flex-1 bg-gray-800 flex flex-col">
+            {/* Header - Desktop */}
+            <div className="hidden lg:flex items-center justify-between p-4 border-b border-gray-700">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-bold text-white">Advanced Editor</h2>
+                <div className="text-sm text-gray-400">
+                  Crop {currentCropIndex + 1} of {allCrops.length}
+                </div>
+                {hasChanges && (
+                  <div className="text-xs text-orange-400 bg-orange-400/10 px-2 py-1 rounded">
+                    Modified
+                  </div>
+                )}
+                {(isDragging || isResizing) && (
+                  <div className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded animate-pulse">
+                    {isDragging ? 'Moving' : 'Resizing'}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowUncropped(!showUncropped)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showUncropped ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Toggle uncropped area preview"
+                >
+                  {showUncropped ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => setShowGrid(!showGrid)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showGrid ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  title="Toggle grid"
+                >
+                  {showGrid ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5 text-white" />
+                </button>
+              </div>
+            </div>
+
             {/* Preview Canvas */}
             <div 
               ref={containerRef}
@@ -961,9 +852,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     ↻ {Math.round(crop.rotation)}°
                   </span>
                 )}
-                {(isDragging || isResizing || isRotating) && (
+                {(isDragging || isResizing) && (
                   <span className="ml-2 text-blue-400">
-                    • {isDragging ? 'Moving' : isResizing ? 'Resizing' : 'Rotating'}
+                    • {isDragging ? 'Moving' : 'Resizing'}
                   </span>
                 )}
               </div>
@@ -974,9 +865,9 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               </div>
 
               {/* Interaction Instructions */}
-              {!isDragging && !isResizing && !isPanning && !isRotating && (
+              {!isDragging && !isResizing && !isPanning && (
                 <div className="absolute bottom-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  Scroll to zoom • Drag to pan • Resize handles • Rotation handle
+                  Scroll to zoom • Drag to pan • Resize handles
                 </div>
               )}
             </div>
@@ -997,7 +888,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     title="Previous crop"
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span>Previous</span>
+                    <span className="hidden sm:inline">Previous</span>
                   </button>
                   
                   <div className="text-center">
@@ -1017,7 +908,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     }`}
                     title="Next crop"
                   >
-                    <span>Next</span>
+                    <span className="hidden sm:inline">Next</span>
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -1054,7 +945,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
           </div>
 
           {/* Right Sidebar - Settings */}
-          <div className="w-80 bg-gray-900 border-l border-gray-700 flex flex-col">
+          <div className="w-full lg:w-80 bg-gray-900 border-t lg:border-t-0 lg:border-l border-gray-700 flex flex-col">
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white flex items-center">
                 <Settings className="h-5 w-5 mr-2" />
@@ -1063,6 +954,43 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+              {/* Mobile View Toggle */}
+              <div className="lg:hidden space-y-3">
+                <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Show uncropped area</span>
+                  <button
+                    onClick={() => setShowUncropped(!showUncropped)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      showUncropped ? 'bg-purple-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        showUncropped ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Show grid</span>
+                  <button
+                    onClick={() => setShowGrid(!showGrid)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      showGrid ? 'bg-blue-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        showGrid ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Output File Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1087,8 +1015,8 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               </div>
 
-              {/* View Options */}
-              <div className="space-y-3">
+              {/* View Options - Desktop */}
+              <div className="hidden lg:block space-y-3">
                 <h4 className="text-sm font-semibold text-gray-300">View Options</h4>
                 
                 <div className="flex items-center justify-between">
