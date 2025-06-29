@@ -347,83 +347,47 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           ctx.strokeRect(rotated.x - handleSize/2, rotated.y - handleSize/2, handleSize, handleSize);
         });
 
-        // ENHANCED ROTATION BUTTON (Yellow Circle) - larger and more prominent
-        const rotationHandleDistance = window.innerWidth < 768 ? 50 : 40;
-        const rotationHandleSize = window.innerWidth < 768 ? 24 : 18;
+        // Rotation handle (circle above the crop) - larger for mobile
+        const rotationHandleDistance = window.innerWidth < 768 ? 40 : 30;
+        const rotationHandleSize = window.innerWidth < 768 ? 20 : 14;
         const rotationHandle = rotatePoint(
           canvasPos.x + canvasWidth/2, 
           canvasPos.y - rotationHandleDistance
         );
         
-        // Draw connection line from crop to rotation handle
-        ctx.strokeStyle = '#F59E0B'; // Yellow/Orange
-        ctx.lineWidth = 3;
-        ctx.setLineDash([4, 4]);
+        // Draw line from crop to rotation handle
+        ctx.strokeStyle = isGridCrop ? '#9333EA' : '#3B82F6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
         const topCenter = rotatePoint(canvasPos.x + canvasWidth/2, canvasPos.y);
         ctx.beginPath();
         ctx.moveTo(topCenter.x, topCenter.y);
         ctx.lineTo(rotationHandle.x, rotationHandle.y);
         ctx.stroke();
         
-        // Draw prominent yellow rotation button (circle)
+        // Draw rotation handle (circle)
         ctx.setLineDash([]);
-        
-        // Outer glow effect
-        const isRotating = rotating?.cropId === crop.id;
-        if (isRotating) {
-          ctx.shadowColor = '#F59E0B';
-          ctx.shadowBlur = 15;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
-        }
-        
-        // Main yellow circle
-        ctx.fillStyle = isRotating ? '#FBBF24' : '#F59E0B'; // Brighter when rotating
+        ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(rotationHandle.x, rotationHandle.y, rotationHandleSize/2 + 3, 0, 2 * Math.PI);
+        ctx.arc(rotationHandle.x, rotationHandle.y, rotationHandleSize/2 + 2, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
         
-        // Reset shadow
-        ctx.shadowBlur = 0;
-        
-        // Inner circle for depth
-        ctx.fillStyle = isRotating ? '#FCD34D' : '#FBBF24';
-        ctx.beginPath();
-        ctx.arc(rotationHandle.x, rotationHandle.y, rotationHandleSize/2, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        // Rotation icon (curved arrow) - more prominent
+        // Draw rotation icon (curved arrow)
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        
-        // Draw curved arrow
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(rotationHandle.x, rotationHandle.y, 6, -Math.PI/2, Math.PI/2);
+        ctx.arc(rotationHandle.x, rotationHandle.y, 4, -Math.PI/2, Math.PI/2);
         ctx.stroke();
-        
-        // Arrow head - larger and more visible
-        ctx.fillStyle = '#FFFFFF';
+        // Arrow head
         ctx.beginPath();
-        ctx.moveTo(rotationHandle.x + 3, rotationHandle.y + 6);
-        ctx.lineTo(rotationHandle.x + 7, rotationHandle.y + 3);
-        ctx.lineTo(rotationHandle.x + 7, rotationHandle.y + 9);
+        ctx.moveTo(rotationHandle.x + 2, rotationHandle.y + 4);
+        ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 2);
+        ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 6);
         ctx.closePath();
+        ctx.fillStyle = '#FFFFFF';
         ctx.fill();
-        
-        // Add rotation angle indicator when rotating
-        if (isRotating) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(rotationHandle.x - 25, rotationHandle.y - 35, 50, 20);
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${Math.round(rotation)}°`, rotationHandle.x, rotationHandle.y - 22);
-          ctx.textAlign = 'left';
-        }
       }
 
       // Draw label with background (always horizontal) with boundary awareness
@@ -626,7 +590,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const getRotationHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = window.innerWidth < 768 ? 24 : 18; // Larger handle on mobile
+    const handleSize = window.innerWidth < 768 ? 20 : 14; // Larger handle on mobile
     const rotation = crop.rotation || 0;
     
     // Convert crop coordinates to canvas coordinates
@@ -640,7 +604,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     const cos = Math.cos((rotation * Math.PI) / 180);
     const sin = Math.sin((rotation * Math.PI) / 180);
     
-    const rotationHandleDistance = window.innerWidth < 768 ? 50 : 40;
+    const rotationHandleDistance = window.innerWidth < 768 ? 40 : 30;
     const dx = 0;
     const dy = -rotationHandleDistance;
     const rotationHandleX = centerX + dx * cos - dy * sin;
@@ -650,7 +614,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       Math.pow(x - rotationHandleX, 2) + Math.pow(y - rotationHandleY, 2)
     );
     
-    return distance <= handleSize + 5 ? 'rotate' : null; // Slightly larger hit area
+    return distance <= handleSize ? 'rotate' : null;
   };
 
   const calculateAngleFromCenter = (centerX: number, centerY: number, mouseX: number, mouseY: number) => {
@@ -741,7 +705,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       setLastTouchPos(pos);
     }
     
-    // Check for rotation handle first (PRIORITY - Yellow Circle Button)
+    // Check for rotation handle first
     if (selectedCrop) {
       const rotationHandle = getRotationHandle(pos.x, pos.y, selectedCrop);
       if (rotationHandle) {
@@ -1171,7 +1135,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
             <p className="text-xs md:text-sm text-gray-400">
               • {window.innerWidth < 768 ? 'Tap' : 'Drag'} on image to create crops<br/>
               • {window.innerWidth < 768 ? 'Tap' : 'Drag'} crops to move them<br/>
-              • Use <span className="text-yellow-400 font-semibold">yellow circle button</span> to rotate<br/>
+              • Use rotation handle to rotate<br/>
               • {window.innerWidth < 768 ? 'Pinch to zoom' : 'Scroll to zoom'}<br/>
               • {window.innerWidth < 768 ? 'Tap' : 'Drag'} empty space to pan<br/>
               • {window.innerWidth < 768 ? 'Double-tap' : 'Double-click'} crop for advanced editing<br/>
