@@ -148,6 +148,28 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     return null;
   }, [crop, showUncropped, imageToCanvasCoords, previewScale]);
 
+  // Constrain crop to image boundaries
+  const constrainCropToImage = useCallback((newCrop: CropArea): CropArea => {
+    if (!originalImage) return newCrop;
+
+    let constrainedCrop = { ...newCrop };
+
+    // Ensure crop doesn't go outside image boundaries
+    constrainedCrop.x = Math.max(0, Math.min(constrainedCrop.x, originalImage.width - constrainedCrop.width));
+    constrainedCrop.y = Math.max(0, Math.min(constrainedCrop.y, originalImage.height - constrainedCrop.height));
+
+    // Ensure crop doesn't become larger than image
+    constrainedCrop.width = Math.min(constrainedCrop.width, originalImage.width - constrainedCrop.x);
+    constrainedCrop.height = Math.min(constrainedCrop.height, originalImage.height - constrainedCrop.y);
+
+    // Ensure minimum crop size
+    const minCropSize = 10;
+    constrainedCrop.width = Math.max(minCropSize, constrainedCrop.width);
+    constrainedCrop.height = Math.max(minCropSize, constrainedCrop.height);
+
+    return constrainedCrop;
+  }, [originalImage]);
+
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -533,8 +555,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
       
       // Ensure minimum size
-      newCrop.width = Math.max(20, newCrop.width);
-      newCrop.height = Math.max(20, newCrop.height);
+      newCrop.width = Math.max(10, newCrop.width);
+      newCrop.height = Math.max(10, newCrop.height);
+      
+      // Apply image boundary constraints
+      newCrop = constrainCropToImage(newCrop);
       
       onUpdateCrop(newCrop);
       
@@ -553,13 +578,19 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const newX = originalPosition.x + imageDeltaX;
       const newY = originalPosition.y + imageDeltaY;
       
-      onUpdateCrop({
+      let newCrop = {
+        ...crop,
         x: newX,
         y: newY
-      });
+      };
+
+      // Apply image boundary constraints
+      newCrop = constrainCropToImage(newCrop);
+      
+      onUpdateCrop(newCrop);
       
       setDragStart(pos);
-      setOriginalPosition({ x: newX, y: newY });
+      setOriginalPosition({ x: newCrop.x, y: newCrop.y });
       
     } else if (isPanning) {
       // Handle panning
@@ -820,7 +851,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
               {/* Interaction Instructions */}
               {!isDragging && !isResizing && !isPanning && (
                 <div className="absolute bottom-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  Scroll to zoom • Drag to pan • Resize handles
+                  Scroll to zoom • Drag to pan • Resize handles • Constrained to image
                 </div>
               )}
             </div>
@@ -979,9 +1010,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.width)}
-                      onChange={(e) => onUpdateCrop({ width: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => {
+                        const width = parseInt(e.target.value) || 1;
+                        let newCrop = { ...crop, width };
+                        newCrop = constrainCropToImage(newCrop);
+                        onUpdateCrop(newCrop);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       min="1"
+                      max={originalImage?.width || 1000}
                     />
                   </div>
                   <div>
@@ -989,9 +1026,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.height)}
-                      onChange={(e) => onUpdateCrop({ height: parseInt(e.target.value) || 1 })}
+                      onChange={(e) => {
+                        const height = parseInt(e.target.value) || 1;
+                        let newCrop = { ...crop, height };
+                        newCrop = constrainCropToImage(newCrop);
+                        onUpdateCrop(newCrop);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       min="1"
+                      max={originalImage?.height || 1000}
                     />
                   </div>
                 </div>
@@ -1003,8 +1046,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.x)}
-                      onChange={(e) => onUpdateCrop({ x: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const x = parseInt(e.target.value) || 0;
+                        let newCrop = { ...crop, x };
+                        newCrop = constrainCropToImage(newCrop);
+                        onUpdateCrop(newCrop);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      min="0"
+                      max={originalImage ? originalImage.width - crop.width : 1000}
                     />
                   </div>
                   <div>
@@ -1012,8 +1062,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                     <input
                       type="number"
                       value={Math.round(crop.y)}
-                      onChange={(e) => onUpdateCrop({ y: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => {
+                        const y = parseInt(e.target.value) || 0;
+                        let newCrop = { ...crop, y };
+                        newCrop = constrainCropToImage(newCrop);
+                        onUpdateCrop(newCrop);
+                      }}
                       className="w-full bg-gray-800 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      min="0"
+                      max={originalImage ? originalImage.height - crop.height : 1000}
                     />
                   </div>
                 </div>
@@ -1075,6 +1132,19 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                   />
                 </div>
               )}
+
+              {/* Image Boundary Info */}
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+                <h4 className="text-sm font-semibold text-blue-300 mb-2">Image Boundaries</h4>
+                <div className="text-xs text-blue-200 space-y-1">
+                  <div><strong>Image Size:</strong> {originalImage?.width || 0} × {originalImage?.height || 0}</div>
+                  <div><strong>Crop Position:</strong> {Math.round(crop.x)}, {Math.round(crop.y)}</div>
+                  <div><strong>Crop Size:</strong> {Math.round(crop.width)} × {Math.round(crop.height)}</div>
+                  <div className="text-xs text-blue-300 mt-2">
+                    Crops are automatically constrained to image boundaries
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Bottom Actions */}

@@ -23,13 +23,11 @@ interface ViewportAwareCropCanvasProps {
   onCropExport: (cropId: string) => void;
 }
 
-interface ViewportConstraints {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  viewportWidth: number;
-  viewportHeight: number;
+interface ImageBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = ({
@@ -66,20 +64,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   const [newCropEnd, setNewCropEnd] = useState({ x: 0, y: 0 });
   const [lastClickTime, setLastClickTime] = useState(0);
   const [lastClickedCrop, setLastClickedCrop] = useState<string | null>(null);
-  const [viewportConstraints, setViewportConstraints] = useState<ViewportConstraints>({
-    minX: 0,
-    minY: 0,
-    maxX: 0,
-    maxY: 0,
-    viewportWidth: 0,
-    viewportHeight: 0
-  });
-
-  // Touch interaction states
-  const [isTouching, setIsTouching] = useState(false);
-  const [touchStartTime, setTouchStartTime] = useState(0);
-  const [lastTouchTime, setLastTouchTime] = useState(0);
-  const [lastTouchedCrop, setLastTouchedCrop] = useState<string | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -92,204 +76,68 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     cropId: null
   });
 
-  // Coordinate conversion functions
+  // Calculate image boundaries in canvas coordinates
+  const getImageBounds = useCallback((): ImageBounds => {
+    if (!originalImage) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+
+    return {
+      x: imageOffset.x,
+      y: imageOffset.y,
+      width: originalImage.width * imageScale,
+      height: originalImage.height * imageScale
+    };
+  }, [originalImage, imageScale, imageOffset]);
+
+  // Convert canvas coordinates to image coordinates
   const canvasToImageCoords = useCallback((canvasX: number, canvasY: number) => {
-    // Convert canvas coordinates to image coordinates
+    if (!originalImage) return { x: 0, y: 0 };
+
     const imageX = (canvasX - imageOffset.x) / imageScale;
     const imageY = (canvasY - imageOffset.y) / imageScale;
-    return { x: imageX, y: imageY };
-  }, [imageOffset, imageScale]);
 
+    return { x: imageX, y: imageY };
+  }, [originalImage, imageScale, imageOffset]);
+
+  // Convert image coordinates to canvas coordinates
   const imageToCanvasCoords = useCallback((imageX: number, imageY: number) => {
-    // Convert image coordinates to canvas coordinates
     const canvasX = imageX * imageScale + imageOffset.x;
     const canvasY = imageY * imageScale + imageOffset.y;
+
     return { x: canvasX, y: canvasY };
-  }, [imageOffset, imageScale]);
+  }, [imageScale, imageOffset]);
 
-  // Calculate viewport constraints
-  const updateViewportConstraints = useCallback(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const containerRect = container.getBoundingClientRect();
-    const canvasRect = canvas.getBoundingClientRect();
-    
-    // Calculate safe boundaries within the viewport
-    const viewportPadding = 20; // Minimum distance from viewport edges
-    const controlsHeight = 60; // Space needed for crop controls
-    
-    const constraints: ViewportConstraints = {
-      minX: viewportPadding,
-      minY: viewportPadding + controlsHeight,
-      maxX: window.innerWidth - viewportPadding,
-      maxY: window.innerHeight - viewportPadding - controlsHeight,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight
-    };
-    
-    setViewportConstraints(constraints);
-  }, []);
-
-  // Update constraints on mount and window resize
-  useEffect(() => {
-    updateViewportConstraints();
-    
-    const handleResize = () => {
-      updateViewportConstraints();
-      // Auto-adjust image position if it goes out of bounds
-      adjustImageToViewport();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [updateViewportConstraints]);
-
-  // Adjust image position to stay within viewport
-  const adjustImageToViewport = useCallback(() => {
-    if (!originalImage || !viewportConstraints.viewportWidth) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const canvasRect = canvas.getBoundingClientRect();
-    const imgWidth = originalImage.width * imageScale;
-    const imgHeight = originalImage.height * imageScale;
-
-    let newOffset = { ...imageOffset };
-    let needsUpdate = false;
-
-    // Check if image extends beyond viewport boundaries
-    const imageRight = canvasRect.left + imageOffset.x + imgWidth;
-    const imageBottom = canvasRect.top + imageOffset.y + imgHeight;
-    const imageLeft = canvasRect.left + imageOffset.x;
-    const imageTop = canvasRect.top + imageOffset.y;
-
-    // Adjust horizontal position
-    if (imageRight < viewportConstraints.minX) {
-      newOffset.x = viewportConstraints.minX - canvasRect.left - imgWidth + 100;
-      needsUpdate = true;
-    } else if (imageLeft > viewportConstraints.maxX) {
-      newOffset.x = viewportConstraints.maxX - canvasRect.left - 100;
-      needsUpdate = true;
-    }
-
-    // Adjust vertical position
-    if (imageBottom < viewportConstraints.minY) {
-      newOffset.y = viewportConstraints.minY - canvasRect.top - imgHeight + 100;
-      needsUpdate = true;
-    } else if (imageTop > viewportConstraints.maxY) {
-      newOffset.y = viewportConstraints.maxY - canvasRect.top - 100;
-      needsUpdate = true;
-    }
-
-    if (needsUpdate) {
-      onImageTransform({ scale: imageScale, offset: newOffset });
-    }
-  }, [originalImage, imageScale, imageOffset, viewportConstraints, onImageTransform]);
-
-  // Constrain crop to viewport boundaries (in canvas coordinates)
-  const constrainCropToViewport = useCallback((crop: CropArea): CropArea => {
-    const canvas = canvasRef.current;
-    if (!canvas || !viewportConstraints.viewportWidth) return crop;
-
-    // Convert crop from image coordinates to canvas coordinates for viewport checking
-    const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-    
-    const canvasRect = canvas.getBoundingClientRect();
-    
-    // Convert crop coordinates to screen coordinates
-    const cropScreenX = canvasRect.left + cropCanvasPos.x;
-    const cropScreenY = canvasRect.top + cropCanvasPos.y;
-    const cropScreenRight = canvasRect.left + cropCanvasEnd.x;
-    const cropScreenBottom = canvasRect.top + cropCanvasEnd.y;
+  // Constrain crop to image boundaries
+  const constrainCropToImage = useCallback((crop: CropArea): CropArea => {
+    if (!originalImage) return crop;
 
     let constrainedCrop = { ...crop };
-    let needsConstraint = false;
 
-    // Constrain to viewport boundaries
-    if (cropScreenX < viewportConstraints.minX) {
-      const newCanvasX = viewportConstraints.minX - canvasRect.left;
-      const newImagePos = canvasToImageCoords(newCanvasX, cropCanvasPos.y);
-      constrainedCrop.x = newImagePos.x;
-      needsConstraint = true;
-    }
-    
-    if (cropScreenY < viewportConstraints.minY) {
-      const newCanvasY = viewportConstraints.minY - canvasRect.top;
-      const newImagePos = canvasToImageCoords(cropCanvasPos.x, newCanvasY);
-      constrainedCrop.y = newImagePos.y;
-      needsConstraint = true;
-    }
-    
-    if (cropScreenRight > viewportConstraints.maxX) {
-      const newCanvasX = viewportConstraints.maxX - canvasRect.left - (cropCanvasEnd.x - cropCanvasPos.x);
-      const newImagePos = canvasToImageCoords(newCanvasX, cropCanvasPos.y);
-      constrainedCrop.x = newImagePos.x;
-      needsConstraint = true;
-    }
-    
-    if (cropScreenBottom > viewportConstraints.maxY) {
-      const newCanvasY = viewportConstraints.maxY - canvasRect.top - (cropCanvasEnd.y - cropCanvasPos.y);
-      const newImagePos = canvasToImageCoords(cropCanvasPos.x, newCanvasY);
-      constrainedCrop.y = newImagePos.y;
-      needsConstraint = true;
-    }
+    // Ensure crop doesn't go outside image boundaries
+    constrainedCrop.x = Math.max(0, Math.min(constrainedCrop.x, originalImage.width - constrainedCrop.width));
+    constrainedCrop.y = Math.max(0, Math.min(constrainedCrop.y, originalImage.height - constrainedCrop.height));
 
-    // Ensure crop doesn't become too small due to viewport constraints
-    const minCropSizeInImage = 50 / imageScale; // Convert to image coordinates
-    if (constrainedCrop.width < minCropSizeInImage) {
-      constrainedCrop.width = minCropSizeInImage;
-    }
-    if (constrainedCrop.height < minCropSizeInImage) {
-      constrainedCrop.height = minCropSizeInImage;
-    }
+    // Ensure crop doesn't become larger than image
+    constrainedCrop.width = Math.min(constrainedCrop.width, originalImage.width - constrainedCrop.x);
+    constrainedCrop.height = Math.min(constrainedCrop.height, originalImage.height - constrainedCrop.y);
+
+    // Ensure minimum crop size
+    const minCropSize = 10;
+    constrainedCrop.width = Math.max(minCropSize, constrainedCrop.width);
+    constrainedCrop.height = Math.max(minCropSize, constrainedCrop.height);
 
     return constrainedCrop;
-  }, [viewportConstraints, imageToCanvasCoords, canvasToImageCoords, imageScale]);
+  }, [originalImage]);
 
-  // Auto-adjust crop size if it would extend beyond viewport
-  const adjustCropSizeForViewport = useCallback((crop: CropArea, newWidth?: number, newHeight?: number): CropArea => {
-    const canvas = canvasRef.current;
-    if (!canvas || !viewportConstraints.viewportWidth) return crop;
-
-    // Convert crop position to canvas coordinates
-    const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-    const canvasRect = canvas.getBoundingClientRect();
-    const cropScreenX = canvasRect.left + cropCanvasPos.x;
-    const cropScreenY = canvasRect.top + cropCanvasPos.y;
-    
-    // Calculate maximum allowed dimensions in canvas coordinates
-    const maxAllowedCanvasWidth = viewportConstraints.maxX - cropScreenX;
-    const maxAllowedCanvasHeight = viewportConstraints.maxY - cropScreenY;
-    
-    // Convert to image coordinates
-    const maxAllowedImageWidth = maxAllowedCanvasWidth / imageScale;
-    const maxAllowedImageHeight = maxAllowedCanvasHeight / imageScale;
-    
-    let adjustedCrop = { ...crop };
-    
-    if (newWidth !== undefined) {
-      adjustedCrop.width = Math.min(newWidth, maxAllowedImageWidth);
-    }
-    
-    if (newHeight !== undefined) {
-      adjustedCrop.height = Math.min(newHeight, maxAllowedImageHeight);
-    }
-    
-    // Maintain aspect ratio if set
-    if (crop.aspectRatio && crop.aspectRatio > 0) {
-      if (newWidth !== undefined && newHeight === undefined) {
-        adjustedCrop.height = Math.min(adjustedCrop.width / crop.aspectRatio, maxAllowedImageHeight);
-      } else if (newHeight !== undefined && newWidth === undefined) {
-        adjustedCrop.width = Math.min(adjustedCrop.height * crop.aspectRatio, maxAllowedImageWidth);
-      }
-    }
-    
-    return adjustedCrop;
-  }, [viewportConstraints, imageToCanvasCoords, imageScale]);
+  // Check if a point is within the image bounds
+  const isPointInImage = useCallback((canvasX: number, canvasY: number): boolean => {
+    const imageBounds = getImageBounds();
+    return canvasX >= imageBounds.x && 
+           canvasX <= imageBounds.x + imageBounds.width &&
+           canvasY >= imageBounds.y && 
+           canvasY <= imageBounds.y + imageBounds.height;
+  }, [getImageBounds]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -322,29 +170,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       imgHeight
     );
 
-    // Draw viewport boundary indicators
-    if (viewportConstraints.viewportWidth > 0) {
-      const canvas = canvasRef.current;
-      const canvasRect = canvas?.getBoundingClientRect();
-      
-      if (canvasRect) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        
-        // Draw viewport safe area boundaries
-        const safeLeft = Math.max(0, viewportConstraints.minX - canvasRect.left);
-        const safeTop = Math.max(0, viewportConstraints.minY - canvasRect.top);
-        const safeRight = Math.min(canvas.width, viewportConstraints.maxX - canvasRect.left);
-        const safeBottom = Math.min(canvas.height, viewportConstraints.maxY - canvasRect.top);
-        
-        if (safeLeft > 0 || safeTop > 0 || safeRight < canvas.width || safeBottom < canvas.height) {
-          ctx.strokeRect(safeLeft, safeTop, safeRight - safeLeft, safeBottom - safeTop);
-        }
-        
-        ctx.setLineDash([]);
-      }
-    }
+    // Draw image boundary indicator
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(imageOffset.x, imageOffset.y, imgWidth, imgHeight);
+    ctx.setLineDash([]);
 
     // Group crops by grid for visual consistency and sort by zIndex
     const gridGroups = new Map<string, CropArea[]>();
@@ -373,22 +204,30 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 2]);
         
-        // Convert grid bounds to canvas coordinates
-        const minImageX = Math.min(...gridCrops.map(c => c.x));
-        const minImageY = Math.min(...gridCrops.map(c => c.y));
-        const maxImageX = Math.max(...gridCrops.map(c => c.x + c.width));
-        const maxImageY = Math.max(...gridCrops.map(c => c.y + c.height));
-        
-        const minCanvas = imageToCanvasCoords(minImageX, minImageY);
-        const maxCanvas = imageToCanvasCoords(maxImageX, maxImageY);
+        // Convert grid crop coordinates to canvas coordinates for drawing
+        const canvasGridCrops = gridCrops.map(crop => {
+          const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+          const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+          return {
+            x: canvasPos.x,
+            y: canvasPos.y,
+            width: canvasEnd.x - canvasPos.x,
+            height: canvasEnd.y - canvasPos.y
+          };
+        });
         
         // Draw grid outline
-        ctx.strokeRect(minCanvas.x - 5, minCanvas.y - 5, maxCanvas.x - minCanvas.x + 10, maxCanvas.y - minCanvas.y + 10);
+        const minX = Math.min(...canvasGridCrops.map(c => c.x));
+        const minY = Math.min(...canvasGridCrops.map(c => c.y));
+        const maxX = Math.max(...canvasGridCrops.map(c => c.x + c.width));
+        const maxY = Math.max(...canvasGridCrops.map(c => c.y + c.height));
+        
+        ctx.strokeRect(minX - 5, minY - 5, maxX - minX + 10, maxY - minY + 10);
         ctx.setLineDash([]);
       }
     });
 
-    // Draw crop areas with grid awareness
+    // Draw crop areas with image boundary awareness
     const allCrops = [...individualCrops, ...Array.from(gridGroups.values()).flat()];
     
     allCrops.forEach(crop => {
@@ -396,24 +235,21 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const isGridCrop = !!crop.gridId;
       const rotation = crop.rotation || 0;
       
-      // Convert crop coordinates from image space to canvas space
-      const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-      const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-      const cropCanvasWidth = cropCanvasEnd.x - cropCanvasPos.x;
-      const cropCanvasHeight = cropCanvasEnd.y - cropCanvasPos.y;
+      // Convert crop coordinates (image space) to canvas coordinates for drawing
+      const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+      const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+      const canvasWidth = canvasEnd.x - canvasPos.x;
+      const canvasHeight = canvasEnd.y - canvasPos.y;
       
-      // Check if crop is within viewport
-      const canvas = canvasRef.current;
-      const canvasRect = canvas?.getBoundingClientRect();
-      const isInViewport = canvasRect && 
-        cropCanvasPos.x + cropCanvasWidth > viewportConstraints.minX - canvasRect.left &&
-        cropCanvasPos.x < viewportConstraints.maxX - canvasRect.left &&
-        cropCanvasPos.y + cropCanvasHeight > viewportConstraints.minY - canvasRect.top &&
-        cropCanvasPos.y < viewportConstraints.maxY - canvasRect.top;
+      // Check if crop extends beyond image boundaries
+      const isWithinImageBounds = crop.x >= 0 && 
+                                  crop.y >= 0 && 
+                                  crop.x + crop.width <= originalImage.width && 
+                                  crop.y + crop.height <= originalImage.height;
       
-      // Calculate rotation values at the beginning of the loop
-      const centerX = cropCanvasPos.x + cropCanvasWidth / 2;
-      const centerY = cropCanvasPos.y + cropCanvasHeight / 2;
+      // Calculate rotation values
+      const centerX = canvasPos.x + canvasWidth / 2;
+      const centerY = canvasPos.y + canvasHeight / 2;
       const cos = Math.cos((rotation * Math.PI) / 180);
       const sin = Math.sin((rotation * Math.PI) / 180);
       
@@ -425,20 +261,20 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.translate(-centerX, -centerY);
       
-      // Draw crop rectangle with grid and viewport awareness
+      // Draw crop rectangle with boundary awareness
       let strokeColor = '#10B981'; // Default green
       if (isSelected) {
         strokeColor = '#3B82F6'; // Blue for selected
       } else if (isGridCrop) {
         strokeColor = '#9333EA'; // Purple for grid crops
-      } else if (!isInViewport) {
-        strokeColor = '#EF4444'; // Red for out of viewport
+      } else if (!isWithinImageBounds) {
+        strokeColor = '#EF4444'; // Red for out of bounds
       }
       
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = isSelected ? 3 : 2;
-      ctx.setLineDash(isSelected ? [] : (isInViewport ? [5, 5] : [10, 5]));
-      ctx.strokeRect(cropCanvasPos.x, cropCanvasPos.y, cropCanvasWidth, cropCanvasHeight);
+      ctx.setLineDash(isSelected ? [] : (isWithinImageBounds ? [5, 5] : [10, 5]));
+      ctx.strokeRect(canvasPos.x, canvasPos.y, canvasWidth, canvasHeight);
 
       // Draw overlay with different opacity based on status
       let overlayOpacity = 0.05;
@@ -450,20 +286,20 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       } else if (isGridCrop) {
         overlayOpacity = 0.08;
         overlayColor = '147, 51, 234'; // Purple
-      } else if (!isInViewport) {
+      } else if (!isWithinImageBounds) {
         overlayOpacity = 0.15;
         overlayColor = '239, 68, 68'; // Red
       }
       
       ctx.fillStyle = `rgba(${overlayColor}, ${overlayOpacity})`;
-      ctx.fillRect(cropCanvasPos.x, cropCanvasPos.y, cropCanvasWidth, cropCanvasHeight);
+      ctx.fillRect(canvasPos.x, canvasPos.y, canvasWidth, canvasHeight);
 
       // Restore context
       ctx.restore();
 
-      // Draw resize handles and rotation handle for selected crop (only if in viewport)
-      if (isSelected && isInViewport) {
-        const handleSize = window.innerWidth < 1024 ? 16 : 10; // Larger handles on mobile
+      // Draw resize handles and rotation handle for selected crop
+      if (isSelected) {
+        const handleSize = 10;
         ctx.fillStyle = isGridCrop ? '#9333EA' : '#3B82F6';
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
@@ -480,10 +316,10 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         
         // Corner handles
         const corners = [
-          { x: cropCanvasPos.x, y: cropCanvasPos.y }, // top-left
-          { x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y }, // top-right
-          { x: cropCanvasPos.x, y: cropCanvasPos.y + cropCanvasHeight }, // bottom-left
-          { x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y + cropCanvasHeight }, // bottom-right
+          { x: canvasPos.x, y: canvasPos.y }, // top-left
+          { x: canvasPos.x + canvasWidth, y: canvasPos.y }, // top-right
+          { x: canvasPos.x, y: canvasPos.y + canvasHeight }, // bottom-left
+          { x: canvasPos.x + canvasWidth, y: canvasPos.y + canvasHeight }, // bottom-right
         ];
         
         corners.forEach(corner => {
@@ -494,10 +330,10 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
         // Edge handles
         const edges = [
-          { x: cropCanvasPos.x + cropCanvasWidth/2, y: cropCanvasPos.y }, // top
-          { x: cropCanvasPos.x + cropCanvasWidth/2, y: cropCanvasPos.y + cropCanvasHeight }, // bottom
-          { x: cropCanvasPos.x, y: cropCanvasPos.y + cropCanvasHeight/2 }, // left
-          { x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y + cropCanvasHeight/2 }, // right
+          { x: canvasPos.x + canvasWidth/2, y: canvasPos.y }, // top
+          { x: canvasPos.x + canvasWidth/2, y: canvasPos.y + canvasHeight }, // bottom
+          { x: canvasPos.x, y: canvasPos.y + canvasHeight/2 }, // left
+          { x: canvasPos.x + canvasWidth, y: canvasPos.y + canvasHeight/2 }, // right
         ];
         
         edges.forEach(edge => {
@@ -509,92 +345,74 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         // Rotation handle (circle above the crop)
         const rotationHandleDistance = 30;
         const rotationHandle = rotatePoint(
-          cropCanvasPos.x + cropCanvasWidth/2, 
-          cropCanvasPos.y - rotationHandleDistance
+          canvasPos.x + canvasWidth/2, 
+          canvasPos.y - rotationHandleDistance
         );
         
-        // Only draw rotation handle if it's within viewport
-        const rotHandleInViewport = canvasRect &&
-          rotationHandle.x > viewportConstraints.minX - canvasRect.left &&
-          rotationHandle.x < viewportConstraints.maxX - canvasRect.left &&
-          rotationHandle.y > viewportConstraints.minY - canvasRect.top &&
-          rotationHandle.y < viewportConstraints.maxY - canvasRect.top;
+        // Draw line from crop to rotation handle
+        ctx.strokeStyle = isGridCrop ? '#9333EA' : '#3B82F6';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        const topCenter = rotatePoint(canvasPos.x + canvasWidth/2, canvasPos.y);
+        ctx.beginPath();
+        ctx.moveTo(topCenter.x, topCenter.y);
+        ctx.lineTo(rotationHandle.x, rotationHandle.y);
+        ctx.stroke();
         
-        if (rotHandleInViewport) {
-          // Draw line from crop to rotation handle
-          ctx.strokeStyle = isGridCrop ? '#9333EA' : '#3B82F6';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([3, 3]);
-          const topCenter = rotatePoint(cropCanvasPos.x + cropCanvasWidth/2, cropCanvasPos.y);
-          ctx.beginPath();
-          ctx.moveTo(topCenter.x, topCenter.y);
-          ctx.lineTo(rotationHandle.x, rotationHandle.y);
-          ctx.stroke();
-          
-          // Draw rotation handle (circle) - larger on mobile
-          ctx.setLineDash([]);
-          const rotHandleSize = window.innerWidth < 1024 ? handleSize + 4 : handleSize + 2;
-          ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.beginPath();
-          ctx.arc(rotationHandle.x, rotationHandle.y, rotHandleSize/2, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.stroke();
-          
-          // Draw rotation icon (curved arrow)
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(rotationHandle.x, rotationHandle.y, 4, -Math.PI/2, Math.PI/2);
-          ctx.stroke();
-          // Arrow head
-          ctx.beginPath();
-          ctx.moveTo(rotationHandle.x + 2, rotationHandle.y + 4);
-          ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 2);
-          ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 6);
-          ctx.closePath();
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fill();
-        }
+        // Draw rotation handle (circle)
+        ctx.setLineDash([]);
+        ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(rotationHandle.x, rotationHandle.y, handleSize/2 + 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Draw rotation icon (curved arrow)
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(rotationHandle.x, rotationHandle.y, 4, -Math.PI/2, Math.PI/2);
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(rotationHandle.x + 2, rotationHandle.y + 4);
+        ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 2);
+        ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 6);
+        ctx.closePath();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
       }
 
-      // Draw label with background (always horizontal) with grid and viewport awareness
+      // Draw label with background (always horizontal) with boundary awareness
       if (crop.name) {
         ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
         const textWidth = ctx.measureText(crop.name).width;
         const padding = 8;
         
         // Position label above the crop (accounting for rotation)
-        const labelY = Math.min(cropCanvasPos.y, centerY - cropCanvasHeight/2 * Math.abs(cos) - cropCanvasWidth/2 * Math.abs(sin)) - 35;
+        const labelY = Math.min(canvasPos.y, centerY - canvasHeight/2 * Math.abs(cos) - canvasWidth/2 * Math.abs(sin)) - 35;
         
-        // Check if label would be in viewport
-        const labelInViewport = canvasRect &&
-          cropCanvasPos.x > viewportConstraints.minX - canvasRect.left &&
-          cropCanvasPos.x + textWidth + padding * 2 < viewportConstraints.maxX - canvasRect.left &&
-          labelY > viewportConstraints.minY - canvasRect.top;
-        
-        if (labelInViewport) {
-          // Label background with appropriate color
-          let labelColor = '#10B981'; // Green
-          if (isSelected) {
-            labelColor = '#3B82F6'; // Blue
-          } else if (isGridCrop) {
-            labelColor = '#9333EA'; // Purple
-          } else if (!isInViewport) {
-            labelColor = '#EF4444'; // Red
-          }
-          
-          ctx.fillStyle = labelColor;
-          ctx.fillRect(cropCanvasPos.x, labelY, textWidth + padding * 2, 24);
-          
-          // Label text
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillText(crop.name, cropCanvasPos.x + padding, labelY + 16);
+        // Label background with appropriate color
+        let labelColor = '#10B981'; // Green
+        if (isSelected) {
+          labelColor = '#3B82F6'; // Blue
+        } else if (isGridCrop) {
+          labelColor = '#9333EA'; // Purple
+        } else if (!isWithinImageBounds) {
+          labelColor = '#EF4444'; // Red
         }
+        
+        ctx.fillStyle = labelColor;
+        ctx.fillRect(canvasPos.x, labelY, textWidth + padding * 2, 24);
+        
+        // Label text
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(crop.name, canvasPos.x + padding, labelY + 16);
       }
     });
 
-    // Draw new crop being created with viewport constraints
+    // Draw new crop being created with image boundary constraints
     if (isCreatingCrop) {
       const x = Math.min(newCropStart.x, newCropEnd.x);
       const y = Math.min(newCropStart.y, newCropEnd.y);
@@ -602,43 +420,44 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const height = Math.abs(newCropEnd.y - newCropStart.y);
 
       if (width > 5 && height > 5) {
-        // Check if new crop would be in viewport
-        const canvas = canvasRef.current;
-        const canvasRect = canvas?.getBoundingClientRect();
-        const newCropInViewport = canvasRect &&
-          x > viewportConstraints.minX - canvasRect.left &&
-          x + width < viewportConstraints.maxX - canvasRect.left &&
-          y > viewportConstraints.minY - canvasRect.top &&
-          y + height < viewportConstraints.maxY - canvasRect.top;
+        // Check if new crop would be within image bounds
+        const imageBounds = getImageBounds();
+        const newCropInImageBounds = x >= imageBounds.x && 
+                                     x + width <= imageBounds.x + imageBounds.width &&
+                                     y >= imageBounds.y && 
+                                     y + height <= imageBounds.y + imageBounds.height;
 
         // Draw dashed rectangle for new crop
-        ctx.strokeStyle = newCropInViewport ? '#F59E0B' : '#EF4444';
+        ctx.strokeStyle = newCropInImageBounds ? '#F59E0B' : '#EF4444';
         ctx.lineWidth = 2;
         ctx.setLineDash([8, 4]);
         ctx.strokeRect(x, y, width, height);
 
         // Draw semi-transparent overlay
-        const overlayColor = newCropInViewport ? '245, 158, 11' : '239, 68, 68';
+        const overlayColor = newCropInImageBounds ? '245, 158, 11' : '239, 68, 68';
         ctx.fillStyle = `rgba(${overlayColor}, 0.1)`;
         ctx.fillRect(x, y, width, height);
 
         // Draw dimensions label
         ctx.setLineDash([]);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(x + 5, y + 5, 120, 20);
+        ctx.fillRect(x + 5, y + 5, 140, 20);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
         
         // Convert canvas dimensions to image dimensions for display
-        const imageWidth = width / imageScale;
-        const imageHeight = height / imageScale;
-        const statusText = newCropInViewport ? 
-          `${Math.round(imageWidth)} × ${Math.round(imageHeight)}` : 
-          `${Math.round(imageWidth)} × ${Math.round(imageHeight)} (Out of bounds)`;
+        const imageCoords = canvasToImageCoords(x, y);
+        const imageEnd = canvasToImageCoords(x + width, y + height);
+        const imageWidth = Math.round(imageEnd.x - imageCoords.x);
+        const imageHeight = Math.round(imageEnd.y - imageCoords.y);
+        
+        const statusText = newCropInImageBounds ? 
+          `${imageWidth} × ${imageHeight}` : 
+          `${imageWidth} × ${imageHeight} (Out of bounds)`;
         ctx.fillText(statusText, x + 10, y + 18);
       }
     }
-  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd, rotating, viewportConstraints, imageToCanvasCoords]);
+  }, [originalImage, imageScale, imageOffset, cropAreas, selectedCropId, isCreatingCrop, newCropStart, newCropEnd, rotating, getImageBounds, imageToCanvasCoords, canvasToImageCoords]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -650,36 +469,23 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       canvas.width = rect.width;
       canvas.height = rect.height;
       onCanvasResize({ width: rect.width, height: rect.height });
-      updateViewportConstraints();
       draw();
     };
 
     updateCanvasSize();
     window.addEventListener('resize', updateCanvasSize);
     return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [draw, onCanvasResize, updateViewportConstraints]);
+  }, [draw, onCanvasResize]);
 
   useEffect(() => {
     draw();
   }, [draw]);
 
-  // Unified position getter for both mouse and touch events
-  const getEventPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
-    
-    // Handle touch events
-    if ('touches' in e) {
-      const touch = e.touches[0] || e.changedTouches[0];
-      return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
-      };
-    }
-    
-    // Handle mouse events
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
@@ -697,14 +503,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const rotation = crop.rotation || 0;
       
       // Convert crop coordinates to canvas coordinates
-      const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-      const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-      const cropCanvasWidth = cropCanvasEnd.x - cropCanvasPos.x;
-      const cropCanvasHeight = cropCanvasEnd.y - cropCanvasPos.y;
+      const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+      const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
       
       // Transform point to crop's local coordinate system
-      const centerX = cropCanvasPos.x + cropCanvasWidth / 2;
-      const centerY = cropCanvasPos.y + cropCanvasHeight / 2;
+      const centerX = canvasPos.x + (canvasEnd.x - canvasPos.x) / 2;
+      const centerY = canvasPos.y + (canvasEnd.y - canvasPos.y) / 2;
       const cos = Math.cos((-rotation * Math.PI) / 180);
       const sin = Math.sin((-rotation * Math.PI) / 180);
       
@@ -713,8 +517,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const localX = centerX + dx * cos - dy * sin;
       const localY = centerY + dx * sin + dy * cos;
       
-      if (localX >= cropCanvasPos.x && localX <= cropCanvasPos.x + cropCanvasWidth &&
-          localY >= cropCanvasPos.y && localY <= cropCanvasPos.y + cropCanvasHeight) {
+      if (localX >= canvasPos.x && localX <= canvasEnd.x &&
+          localY >= canvasPos.y && localY <= canvasEnd.y) {
         return crop;
       }
     }
@@ -722,17 +526,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const getResizeHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = window.innerWidth < 1024 ? 16 : 10; // Larger handles on mobile
+    const handleSize = 10;
     const rotation = crop.rotation || 0;
     
     // Convert crop coordinates to canvas coordinates
-    const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-    const cropCanvasWidth = cropCanvasEnd.x - cropCanvasPos.x;
-    const cropCanvasHeight = cropCanvasEnd.y - cropCanvasPos.y;
+    const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+    const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const canvasWidth = canvasEnd.x - canvasPos.x;
+    const canvasHeight = canvasEnd.y - canvasPos.y;
     
-    const centerX = cropCanvasPos.x + cropCanvasWidth / 2;
-    const centerY = cropCanvasPos.y + cropCanvasHeight / 2;
+    const centerX = canvasPos.x + canvasWidth / 2;
+    const centerY = canvasPos.y + canvasHeight / 2;
     const cos = Math.cos((rotation * Math.PI) / 180);
     const sin = Math.sin((rotation * Math.PI) / 180);
     
@@ -746,14 +550,14 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     };
     
     const handles = [
-      { name: 'tl', x: cropCanvasPos.x, y: cropCanvasPos.y },
-      { name: 'tr', x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y },
-      { name: 'bl', x: cropCanvasPos.x, y: cropCanvasPos.y + cropCanvasHeight },
-      { name: 'br', x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y + cropCanvasHeight },
-      { name: 't', x: cropCanvasPos.x + cropCanvasWidth/2, y: cropCanvasPos.y },
-      { name: 'b', x: cropCanvasPos.x + cropCanvasWidth/2, y: cropCanvasPos.y + cropCanvasHeight },
-      { name: 'l', x: cropCanvasPos.x, y: cropCanvasPos.y + cropCanvasHeight/2 },
-      { name: 'r', x: cropCanvasPos.x + cropCanvasWidth, y: cropCanvasPos.y + cropCanvasHeight/2 },
+      { name: 'tl', x: canvasPos.x, y: canvasPos.y },
+      { name: 'tr', x: canvasPos.x + canvasWidth, y: canvasPos.y },
+      { name: 'bl', x: canvasPos.x, y: canvasPos.y + canvasHeight },
+      { name: 'br', x: canvasPos.x + canvasWidth, y: canvasPos.y + canvasHeight },
+      { name: 't', x: canvasPos.x + canvasWidth/2, y: canvasPos.y },
+      { name: 'b', x: canvasPos.x + canvasWidth/2, y: canvasPos.y + canvasHeight },
+      { name: 'l', x: canvasPos.x, y: canvasPos.y + canvasHeight/2 },
+      { name: 'r', x: canvasPos.x + canvasWidth, y: canvasPos.y + canvasHeight/2 },
     ];
 
     for (const handle of handles) {
@@ -768,17 +572,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const getRotationHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = window.innerWidth < 1024 ? 20 : 14; // Larger on mobile
+    const handleSize = 14;
     const rotation = crop.rotation || 0;
     
     // Convert crop coordinates to canvas coordinates
-    const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-    const cropCanvasWidth = cropCanvasEnd.x - cropCanvasPos.x;
-    const cropCanvasHeight = cropCanvasEnd.y - cropCanvasPos.y;
+    const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+    const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const canvasWidth = canvasEnd.x - canvasPos.x;
+    const canvasHeight = canvasEnd.y - canvasPos.y;
     
-    const centerX = cropCanvasPos.x + cropCanvasWidth / 2;
-    const centerY = cropCanvasPos.y + cropCanvasHeight / 2;
+    const centerX = canvasPos.x + canvasWidth / 2;
+    const centerY = canvasPos.y + canvasHeight / 2;
     const cos = Math.cos((rotation * Math.PI) / 180);
     const sin = Math.sin((rotation * Math.PI) / 180);
     
@@ -806,11 +610,10 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     e.preventDefault();
     e.stopPropagation();
     
-    const pos = getEventPos(e);
+    const pos = getMousePos(e);
     const cropAtPos = getCropAt(pos.x, pos.y);
     
     if (cropAtPos) {
-      console.log('🎯 RIGHT-CLICK DETECTED on crop:', cropAtPos.id, cropAtPos.name);
       setContextMenu({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
@@ -823,56 +626,33 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const closeContextMenu = () => {
-    console.log('🔒 Closing context menu');
     setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, cropId: null });
   };
 
-  // WORKING CONTEXT MENU ACTION HANDLERS
+  // Context menu action handlers
   const handleCropDuplicate = () => {
-    console.log('🔥 DUPLICATE ACTION TRIGGERED!');
-    if (!contextMenu.cropId) {
-      console.log('❌ No crop ID in context menu');
-      return;
-    }
+    if (!contextMenu.cropId) return;
     
     const crop = cropAreas.find(c => c.id === contextMenu.cropId);
-    if (!crop) {
-      console.log('❌ Crop not found:', contextMenu.cropId);
-      return;
-    }
+    if (!crop) return;
     
-    console.log('✅ DUPLICATING CROP:', crop.name);
     onCropCopy(crop.id);
     closeContextMenu();
   };
 
   const handleAdvancedEdit = () => {
-    console.log('🔥 ADVANCED EDIT ACTION TRIGGERED!');
-    if (!contextMenu.cropId) {
-      console.log('❌ No crop ID in context menu');
-      return;
-    }
+    if (!contextMenu.cropId) return;
     
-    console.log('✅ OPENING ADVANCED EDIT for crop:', contextMenu.cropId);
     onCropDoubleClick(contextMenu.cropId);
     closeContextMenu();
   };
 
   const handleFitToImage = () => {
-    console.log('🔥 FIT TO IMAGE ACTION TRIGGERED!');
-    if (!contextMenu.cropId || !originalImage) {
-      console.log('❌ No crop ID or original image');
-      return;
-    }
+    if (!contextMenu.cropId || !originalImage) return;
     
     const crop = cropAreas.find(c => c.id === contextMenu.cropId);
-    if (!crop) {
-      console.log('❌ Crop not found:', contextMenu.cropId);
-      return;
-    }
+    if (!crop) return;
     
-    console.log('✅ FITTING CROP TO IMAGE:', crop.name);
-    // Fit crop to entire image in image coordinates
     const updates = {
       x: 0,
       y: 0,
@@ -889,35 +669,24 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     closeContextMenu();
   };
 
-  // Unified start handler for both mouse and touch
-  const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    // Close context menu on any interaction
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Close context menu on any click
     if (contextMenu.isOpen) {
       closeContextMenu();
       return;
     }
 
-    const pos = getEventPos(e);
+    const pos = getMousePos(e);
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
-    
-    // Handle touch-specific logic
-    if ('touches' in e) {
-      setIsTouching(true);
-      setTouchStartTime(Date.now());
-      
-      // Prevent default to avoid scrolling
-      e.preventDefault();
-    }
     
     // Check for rotation handle first
     if (selectedCrop) {
       const rotationHandle = getRotationHandle(pos.x, pos.y, selectedCrop);
       if (rotationHandle) {
-        // Convert crop coordinates to canvas coordinates for rotation calculation
-        const cropCanvasPos = imageToCanvasCoords(selectedCrop.x, selectedCrop.y);
-        const cropCanvasEnd = imageToCanvasCoords(selectedCrop.x + selectedCrop.width, selectedCrop.y + selectedCrop.height);
-        const centerX = cropCanvasPos.x + (cropCanvasEnd.x - cropCanvasPos.x) / 2;
-        const centerY = cropCanvasPos.y + (cropCanvasEnd.y - cropCanvasPos.y) / 2;
+        const canvasPos = imageToCanvasCoords(selectedCrop.x, selectedCrop.y);
+        const canvasEnd = imageToCanvasCoords(selectedCrop.x + selectedCrop.width, selectedCrop.y + selectedCrop.height);
+        const centerX = canvasPos.x + (canvasEnd.x - canvasPos.x) / 2;
+        const centerY = canvasPos.y + (canvasEnd.y - canvasPos.y) / 2;
         const startAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
         setRotating({ cropId: selectedCrop.id, startAngle });
         return;
@@ -934,28 +703,16 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     // Check for crop selection
     const cropAtPos = getCropAt(pos.x, pos.y);
     if (cropAtPos) {
-      // Handle double-click/tap detection
+      // Handle double-click detection
       const currentTime = Date.now();
-      
-      if ('touches' in e) {
-        // Touch double-tap detection
-        if (lastTouchedCrop === cropAtPos.id && currentTime - lastTouchTime < 500) {
-          // Double-tap detected
-          onCropDoubleClick(cropAtPos.id);
-          return;
-        }
-        setLastTouchTime(currentTime);
-        setLastTouchedCrop(cropAtPos.id);
-      } else {
-        // Mouse double-click detection
-        if (lastClickedCrop === cropAtPos.id && currentTime - lastClickTime < 300) {
-          // Double-click detected
-          onCropDoubleClick(cropAtPos.id);
-          return;
-        }
-        setLastClickTime(currentTime);
-        setLastClickedCrop(cropAtPos.id);
+      if (lastClickedCrop === cropAtPos.id && currentTime - lastClickTime < 300) {
+        // Double-click detected
+        onCropDoubleClick(cropAtPos.id);
+        return;
       }
+      
+      setLastClickTime(currentTime);
+      setLastClickedCrop(cropAtPos.id);
       
       onCropSelect(cropAtPos.id);
       setIsDragging(true);
@@ -964,46 +721,35 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Start creating new crop or panning
       onCropSelect(null);
       setLastClickedCrop(null);
-      setLastTouchedCrop(null);
       
-      // Check if we're over the image area to decide between creating crop or panning
-      const imgWidth = originalImage ? originalImage.width * imageScale : 0;
-      const imgHeight = originalImage ? originalImage.height * imageScale : 0;
-      const isOverImage = pos.x >= imageOffset.x && pos.x <= imageOffset.x + imgWidth &&
-                         pos.y >= imageOffset.y && pos.y <= imageOffset.y + imgHeight;
-      
-      if (isOverImage) {
-        // Start creating new crop
-        setIsCreatingCrop(true);
-        setNewCropStart(pos);
-        setNewCropEnd(pos);
-      } else {
-        // Start panning
-        setIsPanning(true);
-        setPanStart(pos);
-        setLastPanOffset(imageOffset);
+      if (e.button === 0) { // Left mouse button
+        // Check if we're over the image area to decide between creating crop or panning
+        if (isPointInImage(pos.x, pos.y)) {
+          // Start creating new crop
+          setIsCreatingCrop(true);
+          setNewCropStart(pos);
+          setNewCropEnd(pos);
+        } else {
+          // Start panning
+          setIsPanning(true);
+          setPanStart(pos);
+          setLastPanOffset(imageOffset);
+        }
       }
     }
   };
 
-  // Unified move handler for both mouse and touch
-  const handleMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const pos = getEventPos(e);
-    
-    // Prevent default for touch to avoid scrolling
-    if ('touches' in e) {
-      e.preventDefault();
-    }
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const pos = getMousePos(e);
     
     if (rotating) {
       const crop = cropAreas.find(c => c.id === rotating.cropId);
       if (!crop) return;
 
-      // Convert crop coordinates to canvas coordinates for rotation calculation
-      const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-      const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-      const centerX = cropCanvasPos.x + (cropCanvasEnd.x - cropCanvasPos.x) / 2;
-      const centerY = cropCanvasPos.y + (cropCanvasEnd.y - cropCanvasPos.y) / 2;
+      const canvasPos = imageToCanvasCoords(crop.x, crop.y);
+      const canvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+      const centerX = canvasPos.x + (canvasEnd.x - canvasPos.x) / 2;
+      const centerY = canvasPos.y + (canvasEnd.y - canvasPos.y) / 2;
       
       // Calculate current angle from center to mouse position
       const currentAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
@@ -1019,8 +765,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const currentRotation = crop.rotation || 0;
       let newRotation = currentRotation + angleDiff;
       
-      // Snap to 15-degree increments when holding Shift (desktop only)
-      if ('shiftKey' in e && e.shiftKey) {
+      // Snap to 15-degree increments when holding Shift
+      if (e.shiftKey) {
         newRotation = Math.round(newRotation / 15) * 15;
       }
       
@@ -1040,63 +786,56 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const crop = cropAreas.find(c => c.id === resizing.cropId);
       if (!crop) return;
 
-      // Convert crop coordinates to canvas coordinates
-      const cropCanvasPos = imageToCanvasCoords(crop.x, crop.y);
-      const cropCanvasEnd = imageToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-      const cropCanvasWidth = cropCanvasEnd.x - cropCanvasPos.x;
-      const cropCanvasHeight = cropCanvasEnd.y - cropCanvasPos.y;
+      // Convert mouse position to image coordinates
+      const imagePos = canvasToImageCoords(pos.x, pos.y);
       
       let newCrop = { ...crop };
       const rotation = crop.rotation || 0;
-      const centerX = cropCanvasPos.x + cropCanvasWidth / 2;
-      const centerY = cropCanvasPos.y + cropCanvasHeight / 2;
+      const centerX = crop.x + crop.width / 2;
+      const centerY = crop.y + crop.height / 2;
       
       // Transform mouse position to crop's local coordinate system
       const cos = Math.cos((-rotation * Math.PI) / 180);
       const sin = Math.sin((-rotation * Math.PI) / 180);
-      const dx = pos.x - centerX;
-      const dy = pos.y - centerY;
+      const dx = imagePos.x - centerX;
+      const dy = imagePos.y - centerY;
       const localX = centerX + dx * cos - dy * sin;
       const localY = centerY + dx * sin + dy * cos;
       
-      // Convert local coordinates back to image coordinates
-      const localImagePos = canvasToImageCoords(localX, localY);
-      const cropCanvasImagePos = canvasToImageCoords(cropCanvasPos.x, cropCanvasPos.y);
-      
       switch (resizing.handle) {
         case 'tl':
-          newCrop.width = crop.width + (crop.x - localImagePos.x);
-          newCrop.height = crop.height + (crop.y - localImagePos.y);
-          newCrop.x = localImagePos.x;
-          newCrop.y = localImagePos.y;
+          newCrop.width = crop.width + (crop.x - localX);
+          newCrop.height = crop.height + (crop.y - localY);
+          newCrop.x = localX;
+          newCrop.y = localY;
           break;
         case 'tr':
-          newCrop.width = localImagePos.x - crop.x;
-          newCrop.height = crop.height + (crop.y - localImagePos.y);
-          newCrop.y = localImagePos.y;
+          newCrop.width = localX - crop.x;
+          newCrop.height = crop.height + (crop.y - localY);
+          newCrop.y = localY;
           break;
         case 'bl':
-          newCrop.width = crop.width + (crop.x - localImagePos.x);
-          newCrop.height = localImagePos.y - crop.y;
-          newCrop.x = localImagePos.x;
+          newCrop.width = crop.width + (crop.x - localX);
+          newCrop.height = localY - crop.y;
+          newCrop.x = localX;
           break;
         case 'br':
-          newCrop.width = localImagePos.x - crop.x;
-          newCrop.height = localImagePos.y - crop.y;
+          newCrop.width = localX - crop.x;
+          newCrop.height = localY - crop.y;
           break;
         case 't':
-          newCrop.height = crop.height + (crop.y - localImagePos.y);
-          newCrop.y = localImagePos.y;
+          newCrop.height = crop.height + (crop.y - localY);
+          newCrop.y = localY;
           break;
         case 'b':
-          newCrop.height = localImagePos.y - crop.y;
+          newCrop.height = localY - crop.y;
           break;
         case 'l':
-          newCrop.width = crop.width + (crop.x - localImagePos.x);
-          newCrop.x = localImagePos.x;
+          newCrop.width = crop.width + (crop.x - localX);
+          newCrop.x = localX;
           break;
         case 'r':
-          newCrop.width = localImagePos.x - crop.x;
+          newCrop.width = localX - crop.x;
           break;
       }
 
@@ -1109,14 +848,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         }
       }
 
-      // Ensure minimum size (in image coordinates)
-      const minSize = 20 / imageScale;
-      newCrop.width = Math.max(minSize, newCrop.width);
-      newCrop.height = Math.max(minSize, newCrop.height);
+      // Ensure minimum size
+      newCrop.width = Math.max(10, newCrop.width);
+      newCrop.height = Math.max(10, newCrop.height);
 
-      // Apply viewport constraints
-      newCrop = adjustCropSizeForViewport(newCrop, newCrop.width, newCrop.height);
-      newCrop = constrainCropToViewport(newCrop);
+      // Apply image boundary constraints
+      newCrop = constrainCropToImage(newCrop);
 
       // Update crop or grid
       if (crop.gridId) {
@@ -1134,19 +871,19 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         const deltaY = pos.y - dragStart.y;
         
         // Convert canvas delta to image coordinates
-        const deltaImagePos = canvasToImageCoords(deltaX, deltaY);
-        const originImagePos = canvasToImageCoords(0, 0);
-        const deltaImageX = deltaImagePos.x - originImagePos.x;
-        const deltaImageY = deltaImagePos.y - originImagePos.y;
+        const startImagePos = canvasToImageCoords(dragStart.x, dragStart.y);
+        const currentImagePos = canvasToImageCoords(pos.x, pos.y);
+        const imageDeltaX = currentImagePos.x - startImagePos.x;
+        const imageDeltaY = currentImagePos.y - startImagePos.y;
         
         let newCrop = {
           ...crop,
-          x: crop.x + deltaImageX,
-          y: crop.y + deltaImageY
+          x: crop.x + imageDeltaX,
+          y: crop.y + imageDeltaY
         };
 
-        // Apply viewport constraints
-        newCrop = constrainCropToViewport(newCrop);
+        // Apply image boundary constraints
+        newCrop = constrainCropToImage(newCrop);
         
         // For grid crops, move the entire grid
         if (crop.gridId) {
@@ -1160,7 +897,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
                 x: gridCrop.x + actualDeltaX,
                 y: gridCrop.y + actualDeltaY
               };
-              onCropUpdate(gridCrop.id, constrainCropToViewport({ ...gridCrop, ...updatedGridCrop }));
+              onCropUpdate(gridCrop.id, constrainCropToImage({ ...gridCrop, ...updatedGridCrop }));
             }
           });
         }
@@ -1185,34 +922,31 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       });
     }
 
-    // Update cursor based on context (desktop only)
-    if (!('touches' in e)) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
-        if (selectedCrop) {
-          if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
-            canvas.style.cursor = rotating ? 'grabbing' : 'grab';
-          } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
-            canvas.style.cursor = 'nw-resize';
-          } else if (getCropAt(pos.x, pos.y)) {
-            canvas.style.cursor = 'move';
-          } else {
-            canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
-          }
+    // Update cursor based on context
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
+      if (selectedCrop) {
+        if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
+          canvas.style.cursor = rotating ? 'grabbing' : 'grab';
+        } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
+          canvas.style.cursor = 'nw-resize';
         } else if (getCropAt(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
-        } else if (isCreatingCrop) {
-          canvas.style.cursor = 'crosshair';
         } else {
-          canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
+          canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
         }
+      } else if (getCropAt(pos.x, pos.y)) {
+        canvas.style.cursor = 'move';
+      } else if (isCreatingCrop) {
+        canvas.style.cursor = 'crosshair';
+      } else {
+        canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
       }
     }
   };
 
-  // Unified end handler for both mouse and touch
-  const handleEnd = () => {
+  const handleMouseUp = () => {
     // Handle crop creation completion
     if (isCreatingCrop) {
       const x = Math.min(newCropStart.x, newCropEnd.x);
@@ -1222,11 +956,11 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
       // Only create crop if it's large enough
       if (width > 20 && height > 20) {
-        const maxZIndex = cropAreas.length > 0 ? Math.max(...cropAreas.map(c => c.zIndex || 0)) : 0;
-        
         // Convert canvas coordinates to image coordinates
         const startImagePos = canvasToImageCoords(x, y);
         const endImagePos = canvasToImageCoords(x + width, y + height);
+        
+        const maxZIndex = cropAreas.length > 0 ? Math.max(...cropAreas.map(c => c.zIndex || 0)) : 0;
         
         let newCrop: Omit<CropArea, 'id'> = {
           x: startImagePos.x,
@@ -1239,8 +973,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           zIndex: maxZIndex + 1
         };
 
-        // Apply viewport constraints to new crop
-        const constrainedCrop = constrainCropToViewport({ ...newCrop, id: 'temp' });
+        // Apply image boundary constraints to new crop
+        const constrainedCrop = constrainCropToImage({ ...newCrop, id: 'temp' });
         newCrop = {
           x: constrainedCrop.x,
           y: constrainedCrop.y,
@@ -1264,7 +998,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     setResizing(null);
     setRotating(null);
     setIsPanning(false);
-    setIsTouching(false);
     
     const canvas = canvasRef.current;
     if (canvas) {
@@ -1274,7 +1007,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    const pos = getEventPos(e);
+    const pos = getMousePos(e);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.max(0.1, Math.min(5, imageScale * delta));
     
@@ -1285,9 +1018,6 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     };
     
     onImageTransform({ scale: newScale, offset: newOffset });
-    
-    // Auto-adjust to viewport after zoom
-    setTimeout(() => adjustImageToViewport(), 100);
   };
 
   const contextMenuCrop = contextMenu.cropId ? cropAreas.find(c => c.id === contextMenu.cropId) : null;
@@ -1296,21 +1026,17 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="w-full h-full touch-none"
-        onMouseDown={handleStart}
-        onMouseMove={handleMove}
-        onMouseUp={handleEnd}
-        onMouseLeave={handleEnd}
-        onTouchStart={handleStart}
-        onTouchMove={handleMove}
-        onTouchEnd={handleEnd}
-        onTouchCancel={handleEnd}
+        className="w-full h-full"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
         onContextMenu={handleContextMenu}
         style={{ cursor: 'grab' }}
       />
       
-      {/* Context Menu - NOW WORKING! */}
+      {/* Context Menu */}
       <CropContextMenu
         isOpen={contextMenu.isOpen}
         position={contextMenu.position}
@@ -1325,30 +1051,16 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
             <h3 className="text-xl font-semibold text-white mb-3">Ready to Crop!</h3>
-            <p className="text-gray-300 mb-2">
-              {window.innerWidth < 1024 ? 'Tap and drag on the image to create a crop area' : 'Click and drag on the image to create a crop area'}
-            </p>
+            <p className="text-gray-300 mb-2">Click and drag on the image to create a crop area</p>
             <p className="text-sm text-gray-400">
-              {window.innerWidth < 1024 ? (
-                <>
-                  • Tap and drag on image to create crops<br/>
-                  • Drag crops to move them<br/>
-                  • Use rotation handle to rotate<br/>
-                  • Pinch to zoom<br/>
-                  • Drag empty space to pan<br/>
-                  • Double-tap crop for advanced editing
-                </>
-              ) : (
-                <>
-                  • Drag on image to create crops<br/>
-                  • Drag crops to move them<br/>
-                  • Use rotation handle to rotate<br/>
-                  • Scroll to zoom<br/>
-                  • Drag empty space to pan<br/>
-                  • Double-click crop for advanced editing<br/>
-                  • Right-click crop for context menu
-                </>
-              )}
+              • Drag on image to create crops<br/>
+              • Drag crops to move them<br/>
+              • Use rotation handle to rotate<br/>
+              • Scroll to zoom<br/>
+              • Drag empty space to pan<br/>
+              • Double-click crop for advanced editing<br/>
+              • Right-click crop for context menu<br/>
+              • Crops are constrained to image boundaries
             </p>
           </div>
         </div>
