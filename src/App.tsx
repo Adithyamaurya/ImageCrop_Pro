@@ -37,17 +37,12 @@ function App() {
       <Header onReset={handleReset} hasImage={!!selectedImage} />
       
       <main className="flex-1">
-        {!selectedImage ? (
-          <div className="flex items-center justify-center min-h-[calc(100vh-80px)]">
-            <ImageUploader onImageSelect={handleImageSelect} />
-          </div>
-        ) : (
-          <CropEditor 
-            imageUrl={selectedImage} 
-            originalImage={originalImage}
-            onReset={handleReset}
-          />
-        )}
+        <CropEditor 
+          imageUrl={selectedImage} 
+          originalImage={originalImage}
+          onReset={handleReset}
+          onImageSelect={handleImageSelect}
+        />
       </main>
     </div>
   );
