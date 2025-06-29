@@ -4,22 +4,19 @@ import { CropControls } from './CropControls';
 import { ExportPanel } from './ExportPanel';
 import { AdvancedCropEditor } from './AdvancedCropEditor';
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
-import { ImageUploader } from './ImageUploader';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { CropArea } from '../App';
 
 interface CropEditorProps {
-  imageUrl: string | null;
+  imageUrl: string;
   originalImage: HTMLImageElement | null;
   onReset: () => void;
-  onImageSelect: (imageUrl: string, image: HTMLImageElement) => void;
 }
 
 export const CropEditor: React.FC<CropEditorProps> = ({ 
   imageUrl, 
   originalImage, 
-  onReset,
-  onImageSelect
+  onReset 
 }) => {
   const [cropAreas, setCropAreas] = useState<CropArea[]>([]);
   const [selectedCropId, setSelectedCropId] = useState<string | null>(null);
@@ -307,15 +304,6 @@ export const CropEditor: React.FC<CropEditorProps> = ({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [advancedEditorOpen]);
-
-  // If no image is selected, show the image uploader
-  if (!imageUrl) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)]">
-        <ImageUploader onImageSelect={onImageSelect} />
-      </div>
-    );
-  }
 
   return (
     <>
