@@ -41,11 +41,13 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   // Interaction states
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [originalPosition, setOriginalPosition] = useState({ x: 0, y: 0 });
   const [originalSize, setOriginalSize] = useState({ width: 0, height: 0 });
+  const [originalRotation, setOriginalRotation] = useState(0);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastPanOffset, setLastPanOffset] = useState({ x: 0, y: 0 });
 
@@ -200,28 +202,58 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   }, [showUncropped, previewScale, previewOffset, baseCanvasSize, originalImage, crop]);
 
-  // Check if a point is within the crop area
+  // Check if a point is within the crop area (accounting for rotation)
   const isPointInCrop = useCallback((canvasX: number, canvasY: number) => {
     if (!showUncropped) return true; // In crop-only mode, entire canvas is draggable
     
-    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
-    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
-    
-    return canvasX >= cropCanvas.x && canvasX <= cropCanvasEnd.x &&
-           canvasY >= cropCanvas.y && canvasY <= cropCanvasEnd.y;
-  }, [crop, showUncropped, cropToCanvasCoords]);
-
-  // Get resize handle at position
-  const getResizeHandle = useCallback((canvasX: number, canvasY: number) => {
-    if (!showUncropped) return null;
-    
+    const rotation = crop.rotation || 0;
     const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
     const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
     const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
     const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
     
-    const handleSize = (isMobile ? 20 : 12) * Math.max(0.5, Math.min(2, previewScale)); // Scale handle size with zoom
+    // Transform point to crop's local coordinate system (accounting for rotation)
+    const centerX = cropCanvas.x + cropCanvasWidth / 2;
+    const centerY = cropCanvas.y + cropCanvasHeight / 2;
+    const cos = Math.cos((-rotation * Math.PI) / 180);
+    const sin = Math.sin((-rotation * Math.PI) / 180);
+    
+    const dx = canvasX - centerX;
+    const dy = canvasY - centerY;
+    const localX = centerX + dx * cos - dy * sin;
+    const localY = centerY + dx * sin + dy * cos;
+    
+    return localX >= cropCanvas.x && localX <= cropCanvas.x + cropCanvasWidth &&
+           localY >= cropCanvas.y && localY <= cropCanvas.y + cropCanvasHeight;
+  }, [crop, showUncropped, cropToCanvasCoords]);
+
+  // Get resize handle at position (accounting for rotation)
+  const getResizeHandle = useCallback((canvasX: number, canvasY: number) => {
+    if (!showUncropped) return null;
+    
+    const rotation = crop.rotation || 0;
+    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
+    const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
+    
+    const centerX = cropCanvas.x + cropCanvasWidth / 2;
+    const centerY = cropCanvas.y + cropCanvasHeight / 2;
+    const cos = Math.cos((rotation * Math.PI) / 180);
+    const sin = Math.sin((rotation * Math.PI) / 180);
+    
+    const handleSize = (isMobile ? 20 : 12) * Math.max(0.5, Math.min(2, previewScale));
     const tolerance = handleSize / 2;
+    
+    // Rotate handle positions
+    const rotatePoint = (x: number, y: number) => {
+      const dx = x - centerX;
+      const dy = y - centerY;
+      return {
+        x: centerX + dx * cos - dy * sin,
+        y: centerY + dx * sin + dy * cos
+      };
+    };
     
     // Corner and edge handles
     const handles = [
@@ -236,13 +268,45 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     ];
     
     for (const handle of handles) {
-      if (Math.abs(canvasX - handle.x) <= tolerance && Math.abs(canvasY - handle.y) <= tolerance) {
+      const rotated = rotatePoint(handle.x, handle.y);
+      if (Math.abs(canvasX - rotated.x) <= tolerance && Math.abs(canvasY - rotated.y) <= tolerance) {
         return handle.name;
       }
     }
     
     return null;
   }, [crop, showUncropped, cropToCanvasCoords, previewScale, isMobile]);
+
+  // Get rotation handle at position
+  const getRotationHandle = useCallback((canvasX: number, canvasY: number) => {
+    if (!showUncropped) return null;
+    
+    const rotation = crop.rotation || 0;
+    const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
+    const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+    const cropCanvasWidth = cropCanvasEnd.x - cropCanvas.x;
+    const cropCanvasHeight = cropCanvasEnd.y - cropCanvas.y;
+    
+    const centerX = cropCanvas.x + cropCanvasWidth / 2;
+    const centerY = cropCanvas.y + cropCanvasHeight / 2;
+    const cos = Math.cos((rotation * Math.PI) / 180);
+    const sin = Math.sin((rotation * Math.PI) / 180);
+    
+    const rotationHandleDistance = isMobile ? 40 : 30;
+    const handleSize = isMobile ? 20 : 14;
+    
+    // Calculate rotation handle position (accounting for current rotation)
+    const dx = 0;
+    const dy = -rotationHandleDistance;
+    const rotationHandleX = centerX + dx * cos - dy * sin;
+    const rotationHandleY = centerY + dx * sin + dy * cos;
+    
+    const distance = Math.sqrt(
+      Math.pow(canvasX - rotationHandleX, 2) + Math.pow(canvasY - rotationHandleY, 2)
+    );
+    
+    return distance <= handleSize ? 'rotate' : null;
+  }, [crop, showUncropped, cropToCanvasCoords, isMobile]);
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -325,15 +389,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       const cropCanvasWidth = crop.width * scaleX;
       const cropCanvasHeight = crop.height * scaleY;
 
-      // Draw the crop area at full opacity
+      // Draw the crop area at full opacity with rotation
       ctx.globalAlpha = 1.0;
       
-      // Apply rotation if present for the crop area
       const rotation = crop.rotation || 0;
+      const centerX = cropCanvasX + cropCanvasWidth / 2;
+      const centerY = cropCanvasY + cropCanvasHeight / 2;
+      
+      // Apply rotation for the crop area
       if (rotation !== 0) {
         ctx.save();
-        const centerX = cropCanvasX + cropCanvasWidth / 2;
-        const centerY = cropCanvasY + cropCanvasHeight / 2;
         ctx.translate(centerX, centerY);
         ctx.rotate((rotation * Math.PI) / 180);
         ctx.translate(-centerX, -centerY);
@@ -362,9 +427,16 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
         ctx.restore();
       }
 
-      // Draw crop area border
-      const borderColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
-      const borderWidth = (isDragging || isResizing) ? 3 : 2;
+      // Draw crop area border (this should also be rotated)
+      const borderColor = (isDragging || isResizing || isRotating) ? '#F59E0B' : '#3B82F6';
+      const borderWidth = (isDragging || isResizing || isRotating) ? 3 : 2;
+      
+      ctx.save();
+      if (rotation !== 0) {
+        ctx.translate(centerX, centerY);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-centerX, -centerY);
+      }
       
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
@@ -372,20 +444,35 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
 
       // Draw crop area overlay
-      const overlayOpacity = (isDragging || isResizing) ? 0.15 : 0.08;
+      const overlayOpacity = (isDragging || isResizing || isRotating) ? 0.15 : 0.08;
       ctx.fillStyle = `rgba(59, 130, 246, ${overlayOpacity})`;
       ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
+      
+      ctx.restore();
 
-      // Draw resize handles
+      // Draw resize handles (these should be rotated with the crop)
       const handleSize = (isMobile ? 20 : 10) * Math.max(0.5, Math.min(2, previewScale));
-      const handleColor = (isDragging || isResizing) ? '#F59E0B' : '#3B82F6';
+      const handleColor = (isDragging || isResizing || isRotating) ? '#F59E0B' : '#3B82F6';
       
       ctx.fillStyle = handleColor;
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
       
-      // Corner handles
+      // Calculate rotated handle positions
+      const cos = Math.cos((rotation * Math.PI) / 180);
+      const sin = Math.sin((rotation * Math.PI) / 180);
+      
+      const rotatePoint = (x: number, y: number) => {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        return {
+          x: centerX + dx * cos - dy * sin,
+          y: centerY + dx * sin + dy * cos
+        };
+      };
+      
+      // Corner and edge handles
       const handles = [
         { x: cropCanvasX, y: cropCanvasY }, // nw
         { x: cropCanvasX + cropCanvasWidth, y: cropCanvasY }, // ne
@@ -398,9 +485,52 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       ];
       
       handles.forEach(handle => {
-        ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
-        ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+        const rotated = rotatePoint(handle.x, handle.y);
+        ctx.fillRect(rotated.x - handleSize/2, rotated.y - handleSize/2, handleSize, handleSize);
+        ctx.strokeRect(rotated.x - handleSize/2, rotated.y - handleSize/2, handleSize, handleSize);
       });
+
+      // Draw rotation handle (circle above the crop)
+      const rotationHandleDistance = isMobile ? 40 : 30;
+      const rotationHandleSize = isMobile ? 20 : 14;
+      const rotationHandle = rotatePoint(
+        cropCanvasX + cropCanvasWidth/2, 
+        cropCanvasY - rotationHandleDistance
+      );
+      
+      // Draw line from crop to rotation handle
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      const topCenter = rotatePoint(cropCanvasX + cropCanvasWidth/2, cropCanvasY);
+      ctx.beginPath();
+      ctx.moveTo(topCenter.x, topCenter.y);
+      ctx.lineTo(rotationHandle.x, rotationHandle.y);
+      ctx.stroke();
+      
+      // Draw rotation handle (circle)
+      ctx.setLineDash([]);
+      ctx.fillStyle = isRotating ? '#F59E0B' : '#F59E0B';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(rotationHandle.x, rotationHandle.y, rotationHandleSize/2 + 2, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Draw rotation icon (curved arrow)
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(rotationHandle.x, rotationHandle.y, 4, -Math.PI/2, Math.PI/2);
+      ctx.stroke();
+      // Arrow head
+      ctx.beginPath();
+      ctx.moveTo(rotationHandle.x + 2, rotationHandle.y + 4);
+      ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 2);
+      ctx.lineTo(rotationHandle.x + 4, rotationHandle.y + 6);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
 
     } else {
       // Show only the crop area (crop-only mode)
@@ -440,7 +570,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       }
 
       // Add border for crop-only mode
-      if (isDragging || isResizing) {
+      if (isDragging || isResizing || isRotating) {
         ctx.strokeStyle = '#F59E0B';
         ctx.lineWidth = 3;
         ctx.setLineDash([6, 3]);
@@ -501,7 +631,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
 
     // Reset global alpha
     ctx.globalAlpha = 1.0;
-  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isMobile]);
+  }, [originalImage, crop, previewScale, previewOffset, showGrid, showUncropped, isDragging, isResizing, isRotating, isMobile]);
 
   useEffect(() => {
     if (isOpen) {
@@ -530,11 +660,35 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     }
   };
 
+  // Calculate angle from center for rotation
+  const calculateAngleFromCenter = useCallback((centerX: number, centerY: number, mouseX: number, mouseY: number) => {
+    const angle = Math.atan2(mouseY - centerY, mouseX - centerX);
+    const degrees = (angle * 180) / Math.PI + 90; // Add 90 to make 0 degrees point up
+    return ((degrees % 360) + 360) % 360; // Normalize to 0-360 range
+  }, []);
+
   // Unified start handler
   const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const pos = getEventPos(e);
     
-    // Check for resize handle first
+    // Check for rotation handle first
+    const rotationHandle = getRotationHandle(pos.x, pos.y);
+    if (rotationHandle) {
+      setIsRotating(true);
+      setOriginalRotation(crop.rotation || 0);
+      
+      // Calculate center of crop in canvas coordinates
+      const cropCanvas = cropToCanvasCoords(crop.x, crop.y);
+      const cropCanvasEnd = cropToCanvasCoords(crop.x + crop.width, crop.y + crop.height);
+      const centerX = cropCanvas.x + (cropCanvasEnd.x - cropCanvas.x) / 2;
+      const centerY = cropCanvas.y + (cropCanvasEnd.y - cropCanvas.y) / 2;
+      
+      setDragStart({ x: centerX, y: centerY }); // Store center as reference
+      setOriginalPosition({ x: pos.x, y: pos.y }); // Store initial mouse position
+      return;
+    }
+    
+    // Check for resize handle
     const handle = getResizeHandle(pos.x, pos.y);
     if (handle) {
       setIsResizing(true);
@@ -563,7 +717,37 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
     const pos = getEventPos(e);
     const canvas = canvasRef.current;
     
-    if (isResizing && resizeHandle) {
+    if (isRotating) {
+      // Handle rotation
+      const centerX = dragStart.x; // Center of crop
+      const centerY = dragStart.y;
+      
+      // Calculate angles
+      const startAngle = calculateAngleFromCenter(centerX, centerY, originalPosition.x, originalPosition.y);
+      const currentAngle = calculateAngleFromCenter(centerX, centerY, pos.x, pos.y);
+      
+      // Calculate rotation difference
+      let angleDiff = currentAngle - startAngle;
+      
+      // Handle angle wrapping
+      if (angleDiff > 180) angleDiff -= 360;
+      if (angleDiff < -180) angleDiff += 360;
+      
+      // Apply rotation
+      let newRotation = originalRotation + angleDiff;
+      
+      // Snap to 15-degree increments when holding Shift (or on mobile)
+      const shouldSnap = ('touches' in e) || (e as React.MouseEvent).shiftKey;
+      if (shouldSnap) {
+        newRotation = Math.round(newRotation / 15) * 15;
+      }
+      
+      // Normalize angle to 0-360 range
+      newRotation = ((newRotation % 360) + 360) % 360;
+      
+      onUpdateCrop({ rotation: newRotation });
+      
+    } else if (isResizing && resizeHandle) {
       // Handle resizing
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
@@ -668,14 +852,15 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
       
     } else {
       // Update cursor based on what's under mouse (desktop only)
-      if (canvas && !isDragging && !isResizing && !isPanning && !isMobile) {
-        const handle = getResizeHandle(pos.x, pos.y);
-        if (handle) {
+      if (canvas && !isDragging && !isResizing && !isRotating && !isPanning && !isMobile) {
+        if (getRotationHandle(pos.x, pos.y)) {
+          canvas.style.cursor = 'grab';
+        } else if (getResizeHandle(pos.x, pos.y)) {
           const cursorMap: { [key: string]: string } = {
             'nw': 'nw-resize', 'ne': 'ne-resize', 'sw': 'sw-resize', 'se': 'se-resize',
             'n': 'n-resize', 's': 's-resize', 'w': 'w-resize', 'e': 'e-resize'
           };
-          canvas.style.cursor = cursorMap[handle] || 'default';
+          canvas.style.cursor = cursorMap[getResizeHandle(pos.x, pos.y) || ''] || 'default';
         } else if (isPointInCrop(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
         } else {
@@ -689,6 +874,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
   const handleEnd = () => {
     setIsDragging(false);
     setIsResizing(false);
+    setIsRotating(false);
     setIsPanning(false);
     setResizeHandle(null);
     
@@ -831,6 +1017,11 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 Modified
               </div>
             )}
+            {(isDragging || isResizing || isRotating) && (
+              <div className="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded animate-pulse">
+                {isDragging ? 'Moving' : isResizing ? 'Resizing' : 'Rotating'}
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-1 md:space-x-2">
             {/* Mobile Settings Toggle */}
@@ -908,7 +1099,7 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 className="max-w-full max-h-full border border-gray-600 rounded touch-none"
                 style={{ 
                   imageRendering: previewScale > 2 ? 'pixelated' : 'auto',
-                  cursor: isPanning ? 'grabbing' : 'default'
+                  cursor: isPanning ? 'grabbing' : isRotating ? 'grabbing' : 'default'
                 }}
                 onMouseDown={handleStart}
                 onMouseMove={handleMove}
@@ -927,15 +1118,30 @@ export const AdvancedCropEditor: React.FC<AdvancedCropEditorProps> = ({
                 </div>
               )}
 
+              {/* Preview Controls Overlay */}
+              <div className="absolute bottom-2 left-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
+                {showUncropped ? 'Full Image Preview' : 'Crop Preview'} • {Math.round(crop.width)} × {Math.round(crop.height)}
+                {crop.rotation && crop.rotation !== 0 && (
+                  <span className="ml-2 text-orange-400">
+                    ↻ {Math.round(crop.rotation)}°
+                  </span>
+                )}
+                {(isDragging || isResizing || isRotating) && (
+                  <span className="ml-2 text-blue-400">
+                    • {isDragging ? 'Moving' : isResizing ? 'Resizing' : 'Rotating'}
+                  </span>
+                )}
+              </div>
+
               {/* View Mode Indicator */}
               <div className="absolute top-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
                 {showUncropped ? 'Context View' : 'Crop Only'}
               </div>
 
               {/* Interaction Instructions */}
-              {!isDragging && !isResizing && !isPanning && (
+              {!isDragging && !isResizing && !isRotating && !isPanning && (
                 <div className="absolute bottom-2 right-2 bg-black/70 rounded px-2 py-1 text-xs text-white">
-                  {isMobile ? 'Pinch to zoom • Drag to pan' : 'Scroll to zoom • Drag to pan'}
+                  {isMobile ? 'Pinch to zoom • Drag to pan • Orange handle to rotate' : 'Scroll to zoom • Drag to pan • Orange handle to rotate'}
                 </div>
               )}
             </div>
