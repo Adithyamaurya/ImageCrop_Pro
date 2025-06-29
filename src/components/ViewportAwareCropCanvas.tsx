@@ -54,7 +54,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [resizing, setResizing] = useState<{ cropId: string; handle: string } | null>(null);
+  const [resizing, setResizing] = useState<{ 
+    cropId: string; 
+    handle: string; 
+    startCrop: CropArea;
+    startMouse: { x: number; y: number };
+  } | null>(null);
   const [rotating, setRotating] = useState<{ cropId: string; startAngle: number } | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -649,7 +654,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     if (selectedCrop) {
       const handle = getResizeHandle(pos.x, pos.y, selectedCrop);
       if (handle) {
-        setResizing({ cropId: selectedCrop.id, handle });
+        setResizing({ 
+          cropId: selectedCrop.id, 
+          handle,
+          startCrop: { ...selectedCrop },
+          startMouse: pos
+        });
         return;
       }
     }
@@ -701,56 +711,57 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const crop = cropAreas.find(c => c.id === resizing.cropId);
       if (!crop) return;
 
-      // Convert mouse position to image coordinates
-      const imagePos = canvasToImageCoords(pos.x, pos.y);
-      
-      let newCrop = { ...crop };
+      // Calculate the mouse movement in image coordinates
+      const currentImagePos = canvasToImageCoords(pos.x, pos.y);
+      const startImagePos = canvasToImageCoords(resizing.startMouse.x, resizing.startMouse.y);
+      const deltaX = currentImagePos.x - startImagePos.x;
+      const deltaY = currentImagePos.y - startImagePos.y;
+
+      // Apply rotation transformation to the delta
       const rotation = crop.rotation || 0;
-      const centerX = crop.x + crop.width / 2;
-      const centerY = crop.y + crop.height / 2;
-      
-      // Transform mouse position to crop's local coordinate system
       const cos = Math.cos((-rotation * Math.PI) / 180);
       const sin = Math.sin((-rotation * Math.PI) / 180);
-      const dx = imagePos.x - centerX;
-      const dy = imagePos.y - centerY;
-      const localX = centerX + dx * cos - dy * sin;
-      const localY = centerY + dx * sin + dy * cos;
       
+      const rotatedDeltaX = deltaX * cos - deltaY * sin;
+      const rotatedDeltaY = deltaX * sin + deltaY * cos;
+
+      let newCrop = { ...resizing.startCrop };
+      
+      // Apply resize based on handle and rotated deltas
       switch (resizing.handle) {
         case 'tl':
-          newCrop.width = crop.width + (crop.x - localX);
-          newCrop.height = crop.height + (crop.y - localY);
-          newCrop.x = localX;
-          newCrop.y = localY;
+          newCrop.width = resizing.startCrop.width - rotatedDeltaX;
+          newCrop.height = resizing.startCrop.height - rotatedDeltaY;
+          newCrop.x = resizing.startCrop.x + rotatedDeltaX;
+          newCrop.y = resizing.startCrop.y + rotatedDeltaY;
           break;
         case 'tr':
-          newCrop.width = localX - crop.x;
-          newCrop.height = crop.height + (crop.y - localY);
-          newCrop.y = localY;
+          newCrop.width = resizing.startCrop.width + rotatedDeltaX;
+          newCrop.height = resizing.startCrop.height - rotatedDeltaY;
+          newCrop.y = resizing.startCrop.y + rotatedDeltaY;
           break;
         case 'bl':
-          newCrop.width = crop.width + (crop.x - localX);
-          newCrop.height = localY - crop.y;
-          newCrop.x = localX;
+          newCrop.width = resizing.startCrop.width - rotatedDeltaX;
+          newCrop.height = resizing.startCrop.height + rotatedDeltaY;
+          newCrop.x = resizing.startCrop.x + rotatedDeltaX;
           break;
         case 'br':
-          newCrop.width = localX - crop.x;
-          newCrop.height = localY - crop.y;
+          newCrop.width = resizing.startCrop.width + rotatedDeltaX;
+          newCrop.height = resizing.startCrop.height + rotatedDeltaY;
           break;
         case 't':
-          newCrop.height = crop.height + (crop.y - localY);
-          newCrop.y = localY;
+          newCrop.height = resizing.startCrop.height - rotatedDeltaY;
+          newCrop.y = resizing.startCrop.y + rotatedDeltaY;
           break;
         case 'b':
-          newCrop.height = localY - crop.y;
+          newCrop.height = resizing.startCrop.height + rotatedDeltaY;
           break;
         case 'l':
-          newCrop.width = crop.width + (crop.x - localX);
-          newCrop.x = localX;
+          newCrop.width = resizing.startCrop.width - rotatedDeltaX;
+          newCrop.x = resizing.startCrop.x + rotatedDeltaX;
           break;
         case 'r':
-          newCrop.width = localX - crop.x;
+          newCrop.width = resizing.startCrop.width + rotatedDeltaX;
           break;
       }
 
@@ -774,7 +785,9 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       if (crop.gridId) {
         onUpdateGridCrops(crop.gridId, {
           width: newCrop.width,
-          height: newCrop.height
+          height: newCrop.height,
+          x: newCrop.x,
+          y: newCrop.y
         });
       } else {
         onCropUpdate(crop.id, newCrop);
