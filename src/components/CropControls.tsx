@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Square, Crop, Grid3X3, Link, Unlink } from 'lucide-react';
+import { Plus, Trash2, Square, Crop, RotateCw, Grid3X3, Link, Unlink } from 'lucide-react';
 import { CropArea } from '../App';
 
 interface CropControlsProps {
@@ -63,6 +63,36 @@ export const CropControls: React.FC<CropControlsProps> = ({
     };
 
     // If this crop is part of a grid, update all crops in the grid
+    if (selectedCrop.gridId) {
+      onUpdateGridCrops(selectedCrop.gridId, updates);
+    } else {
+      onUpdateCrop(selectedCrop.id, updates);
+    }
+  };
+
+  const resetRotation = () => {
+    if (selectedCrop) {
+      const updates = { rotation: 0 };
+      
+      if (selectedCrop.gridId) {
+        onUpdateGridCrops(selectedCrop.gridId, updates);
+      } else {
+        onUpdateCrop(selectedCrop.id, updates);
+      }
+    }
+  };
+
+  const handleRotationChange = (value: string) => {
+    if (!selectedCrop) return;
+    
+    let rotation = parseFloat(value);
+    if (isNaN(rotation)) rotation = 0;
+    
+    // Normalize to 0-360 range
+    rotation = ((rotation % 360) + 360) % 360;
+    
+    const updates = { rotation };
+    
     if (selectedCrop.gridId) {
       onUpdateGridCrops(selectedCrop.gridId, updates);
     } else {
@@ -328,6 +358,11 @@ export const CropControls: React.FC<CropControlsProps> = ({
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
                   {Math.round(crop.width)} × {Math.round(crop.height)}
+                  {crop.rotation && crop.rotation !== 0 && (
+                    <span className="ml-2 text-orange-400">
+                      ↻ {Math.round(crop.rotation)}°
+                    </span>
+                  )}
                   {crop.aspectRatio && crop.aspectRatio > 0 && (
                     <span className="ml-2 text-blue-400">
                       ({crop.aspectRatio === 1 ? '1:1' : 
@@ -369,7 +404,7 @@ export const CropControls: React.FC<CropControlsProps> = ({
               <div className="text-xs text-purple-300 space-y-1">
                 <div><strong>Grid Mode:</strong> Changes apply to all {gridInfo.totalCrops} crops</div>
                 <div><strong>Position:</strong> Row {(selectedCrop.gridPosition?.row || 0) + 1}, Column {(selectedCrop.gridPosition?.col || 0) + 1}</div>
-                <div><strong>Synchronized:</strong> Size and aspect ratio</div>
+                <div><strong>Synchronized:</strong> Size, rotation, aspect ratio</div>
               </div>
             </div>
           )}
@@ -394,6 +429,48 @@ export const CropControls: React.FC<CropControlsProps> = ({
                     <Unlink className="h-4 w-4" />
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* Rotation Control */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-2">
+                Rotation {gridInfo && <span className="text-purple-400">(Grid Synchronized)</span>}
+              </label>
+              <div className="space-y-2">
+                {/* Slider */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={selectedCrop.rotation || 0}
+                    onChange={(e) => handleRotationChange(e.target.value)}
+                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <button
+                    onClick={resetRotation}
+                    className="text-orange-400 hover:text-orange-300 p-1 rounded transition-colors"
+                    title="Reset rotation"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </button>
+                </div>
+                
+                {/* Number Input */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="1"
+                    value={Math.round(selectedCrop.rotation || 0)}
+                    onChange={(e) => handleRotationChange(e.target.value)}
+                    className="w-20 bg-gray-700 text-white rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-gray-400">degrees</span>
+                </div>
               </div>
             </div>
 

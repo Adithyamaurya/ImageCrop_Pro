@@ -44,6 +44,8 @@ export const useKeyboardShortcuts = ({
   const MOVE_STEP_LARGE = 10;
   const RESIZE_STEP = 1;
   const RESIZE_STEP_LARGE = 10;
+  const ROTATION_STEP = 1;
+  const ROTATION_STEP_LARGE = 15;
 
   // Helper function to update crop or grid
   const updateCropOrGrid = useCallback((crop: CropArea, updates: Partial<CropArea>) => {
@@ -103,6 +105,19 @@ export const useKeyboardShortcuts = ({
     });
   }, [selectedCrop, updateCropOrGrid]);
 
+  // Rotation functions
+  const rotateCrop = useCallback((deltaRotation: number) => {
+    if (!selectedCrop) return;
+    
+    const currentRotation = selectedCrop.rotation || 0;
+    let newRotation = currentRotation + deltaRotation;
+    
+    // Normalize to 0-360 range
+    newRotation = ((newRotation % 360) + 360) % 360;
+    
+    updateCropOrGrid(selectedCrop, { rotation: newRotation });
+  }, [selectedCrop, updateCropOrGrid]);
+
   // Aspect ratio cycling
   const cycleAspectRatio = useCallback(() => {
     if (!selectedCrop) return;
@@ -124,6 +139,11 @@ export const useKeyboardShortcuts = ({
   }, [selectedCrop, updateCropOrGrid]);
 
   // Reset functions
+  const resetRotation = useCallback(() => {
+    if (!selectedCrop) return;
+    updateCropOrGrid(selectedCrop, { rotation: 0 });
+  }, [selectedCrop, updateCropOrGrid]);
+
   const resetAspectRatio = useCallback(() => {
     if (!selectedCrop) return;
     updateCropOrGrid(selectedCrop, { aspectRatio: undefined });
@@ -303,6 +323,34 @@ export const useKeyboardShortcuts = ({
         }
         break;
 
+      // Rotation (R key)
+      case 'r':
+        if (!isCtrl) {
+          preventDefault();
+          rotateCrop(isShift ? ROTATION_STEP_LARGE : ROTATION_STEP);
+          return;
+        }
+        break;
+
+      case 'l':
+        if (!isCtrl) {
+          preventDefault();
+          rotateCrop(isShift ? -ROTATION_STEP_LARGE : -ROTATION_STEP);
+          return;
+        }
+        break;
+
+      // Quick rotations
+      case '[':
+        preventDefault();
+        rotateCrop(-90);
+        return;
+
+      case ']':
+        preventDefault();
+        rotateCrop(90);
+        return;
+
       // Aspect ratio
       case 'a':
         if (!isCtrl) {
@@ -313,6 +361,14 @@ export const useKeyboardShortcuts = ({
         break;
 
       // Reset functions
+      case '0':
+        if (isCtrl) {
+          preventDefault();
+          resetRotation();
+          return;
+        }
+        break;
+
       case '9':
         if (isCtrl) {
           preventDefault();
@@ -404,7 +460,9 @@ export const useKeyboardShortcuts = ({
     selectPreviousCrop,
     moveCrop,
     resizeCrop,
+    rotateCrop,
     cycleAspectRatio,
+    resetRotation,
     resetAspectRatio,
     updateCropOrGrid
   ]);
@@ -429,7 +487,10 @@ export const useKeyboardShortcuts = ({
       cropEditing: [
         { key: '← → ↑ ↓', description: 'Move crop (Shift: 10px steps)' },
         { key: 'Ctrl + ← → ↑ ↓', description: 'Resize crop (Shift: 10px steps)' },
+        { key: 'R / L', description: 'Rotate right/left (Shift: 15° steps)' },
+        { key: '[ ]', description: 'Rotate -90° / +90°' },
         { key: 'A', description: 'Cycle aspect ratios' },
+        { key: 'Ctrl+0', description: 'Reset rotation' },
         { key: 'Ctrl+9', description: 'Reset aspect ratio' }
       ],
       cropOperations: [
