@@ -27,6 +27,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
   const [advancedEditingCrop, setAdvancedEditingCrop] = useState<CropArea | null>(null);
   const [editingCropName, setEditingCropName] = useState<string | null>(null);
   const [selectedCrops, setSelectedCrops] = useState<Set<string>>(new Set());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'crops' | 'export'>('crops');
 
   // Initialize image position when image loads
   useEffect(() => {
@@ -305,7 +307,8 @@ export const CropEditor: React.FC<CropEditorProps> = ({
 
   return (
     <>
-      <div className="flex h-[calc(100vh-80px)]">
+      {/* Desktop Layout (unchanged) */}
+      <div className="hidden lg:flex h-[calc(100vh-80px)]">
         {/* Left Sidebar - Crop Tools */}
         <div className="w-80 bg-gray-900 border-r border-gray-700 flex flex-col">
           <CropControls
@@ -360,6 +363,95 @@ export const CropEditor: React.FC<CropEditorProps> = ({
             imageOffset={imageOffset}
             canvasSize={canvasSize}
           />
+        </div>
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="lg:hidden flex flex-col h-[calc(100vh-80px)]">
+        {/* Main Canvas Area - Full height on mobile */}
+        <div className="flex-1 bg-gray-800 relative overflow-hidden">
+          <ViewportAwareCropCanvas
+            imageUrl={imageUrl}
+            originalImage={originalImage}
+            cropAreas={cropAreas}
+            selectedCropId={selectedCropId}
+            onCropSelect={setSelectedCropId}
+            onCropUpdate={updateCropArea}
+            onCropAdd={addCropArea}
+            imageScale={imageScale}
+            imageOffset={imageOffset}
+            onImageTransform={({ scale, offset }) => {
+              setImageScale(scale);
+              setImageOffset(offset);
+            }}
+            onCanvasResize={setCanvasSize}
+            onCropDoubleClick={handleCropDoubleClick}
+            onUpdateGridCrops={updateGridCrops}
+            onCropDelete={deleteCropArea}
+            onCropCopy={copyCropStyle}
+            onCropRename={(cropId) => setEditingCropName(cropId)}
+            onUnlinkFromGrid={unlinkFromGrid}
+            onCropExport={handleCropExport}
+          />
+        </div>
+
+        {/* Mobile Bottom Panel */}
+        <div className="bg-gray-900 border-t border-gray-700">
+          {/* Tab Navigation */}
+          <div className="flex border-b border-gray-700">
+            <button
+              onClick={() => setActiveMobileTab('crops')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeMobileTab === 'crops'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Crop Tools ({cropAreas.length})
+            </button>
+            <button
+              onClick={() => setActiveMobileTab('export')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeMobileTab === 'export'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Export
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+            {activeMobileTab === 'crops' ? (
+              <div className="p-4">
+                <CropControls
+                  cropAreas={cropAreas}
+                  selectedCrop={selectedCrop}
+                  onAddCrop={() => addCropArea()}
+                  onUpdateCrop={updateCropArea}
+                  onDeleteCrop={deleteCropArea}
+                  onSelectCrop={setSelectedCropId}
+                  onCopyCropStyle={copyCropStyle}
+                  onAddMultipleCrops={addMultipleCrops}
+                  onUpdateGridCrops={updateGridCrops}
+                  onUnlinkFromGrid={unlinkFromGrid}
+                  editingCropName={editingCropName}
+                  onSetEditingCropName={setEditingCropName}
+                />
+              </div>
+            ) : (
+              <div className="p-4">
+                <ExportPanel
+                  originalImage={originalImage}
+                  cropAreas={cropAreas}
+                  imageScale={imageScale}
+                  imageOffset={imageOffset}
+                  canvasSize={canvasSize}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
