@@ -614,10 +614,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       Math.pow(x - rotationHandleX, 2) + Math.pow(y - rotationHandleY, 2)
     );
     
-    // Increase the hit area for better usability
-    const hitRadius = handleSize + 5; // Add 5px buffer for easier clicking
-    
-    return distance <= hitRadius ? 'rotate' : null;
+    return distance <= handleSize ? 'rotate' : null;
   };
 
   const calculateAngleFromCenter = (centerX: number, centerY: number, mouseX: number, mouseY: number) => {
@@ -708,7 +705,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       setLastTouchPos(pos);
     }
     
-    // Check for rotation handle first (with improved hit detection)
+    // Check for rotation handle first
     if (selectedCrop) {
       const rotationHandle = getRotationHandle(pos.x, pos.y, selectedCrop);
       if (rotationHandle) {
