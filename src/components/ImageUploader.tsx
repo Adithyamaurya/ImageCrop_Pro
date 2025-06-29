@@ -61,8 +61,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6 flex flex-col min-h-[calc(100vh-160px)] relative">
-      {/* Bolt.new Logo - Top Right with proper viewport constraints */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-8 md:right-8 lg:top-10 lg:right-10 z-20">
+      {/* Bolt.new Logo - Moved higher up with negative top margins */}
+      <div className="absolute -top-2 right-4 sm:-top-4 sm:right-6 md:-top-6 md:right-8 lg:-top-8 lg:right-10 z-20">
         <a
           href="https://bolt.new"
           target="_blank"
@@ -225,7 +225,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
                   <span>Open Source</span>
                 </a>
                 <a 
-                  href="#" 
+                  href="https://bolt.new" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center space-x-2 hover:text-white transition-colors"
                   title="Support development"
                 >
