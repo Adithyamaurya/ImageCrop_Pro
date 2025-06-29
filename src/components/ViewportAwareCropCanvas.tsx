@@ -75,6 +75,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     viewportHeight: 0
   });
 
+  // Touch interaction states
+  const [isTouching, setIsTouching] = useState(false);
+  const [touchStartTime, setTouchStartTime] = useState(0);
+  const [lastTouchTime, setLastTouchTime] = useState(0);
+  const [lastTouchedCrop, setLastTouchedCrop] = useState<string | null>(null);
+
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     isOpen: boolean;
@@ -413,7 +419,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
       // Draw resize handles and rotation handle for selected crop (only if in viewport)
       if (isSelected && isInViewport) {
-        const handleSize = 10;
+        const handleSize = window.innerWidth < 1024 ? 16 : 10; // Larger handles on mobile
         ctx.fillStyle = isGridCrop ? '#9333EA' : '#3B82F6';
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
@@ -481,12 +487,13 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
           ctx.lineTo(rotationHandle.x, rotationHandle.y);
           ctx.stroke();
           
-          // Draw rotation handle (circle)
+          // Draw rotation handle (circle) - larger on mobile
           ctx.setLineDash([]);
+          const rotHandleSize = window.innerWidth < 1024 ? handleSize + 4 : handleSize + 2;
           ctx.fillStyle = rotating?.cropId === crop.id ? '#F59E0B' : '#F59E0B';
           ctx.strokeStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(rotationHandle.x, rotationHandle.y, handleSize/2 + 2, 0, 2 * Math.PI);
+          ctx.arc(rotationHandle.x, rotationHandle.y, rotHandleSize/2, 0, 2 * Math.PI);
           ctx.fill();
           ctx.stroke();
           
@@ -608,11 +615,23 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     draw();
   }, [draw]);
 
-  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Unified position getter for both mouse and touch events
+  const getEventPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
+    
+    // Handle touch events
+    if ('touches' in e) {
+      const touch = e.touches[0] || e.changedTouches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    }
+    
+    // Handle mouse events
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
@@ -649,7 +668,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const getResizeHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = 10;
+    const handleSize = window.innerWidth < 1024 ? 16 : 10; // Larger handles on mobile
     const rotation = crop.rotation || 0;
     const centerX = crop.x + crop.width / 2;
     const centerY = crop.y + crop.height / 2;
@@ -688,7 +707,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
   };
 
   const getRotationHandle = (x: number, y: number, crop: CropArea) => {
-    const handleSize = 14;
+    const handleSize = window.innerWidth < 1024 ? 20 : 14; // Larger on mobile
     const rotation = crop.rotation || 0;
     const centerX = crop.x + crop.width / 2;
     const centerY = crop.y + crop.height / 2;
@@ -714,12 +733,12 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     return ((degrees % 360) + 360) % 360; // Normalize to 0-360 range
   };
 
-  // Context menu handlers - THESE ACTUALLY WORK NOW!
+  // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     e.stopPropagation();
     
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     const cropAtPos = getCropAt(pos.x, pos.y);
     
     if (cropAtPos) {
@@ -801,15 +820,25 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     closeContextMenu();
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Close context menu on any click
+  // Unified start handler for both mouse and touch
+  const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    // Close context menu on any interaction
     if (contextMenu.isOpen) {
       closeContextMenu();
       return;
     }
 
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
+    
+    // Handle touch-specific logic
+    if ('touches' in e) {
+      setIsTouching(true);
+      setTouchStartTime(Date.now());
+      
+      // Prevent default to avoid scrolling
+      e.preventDefault();
+    }
     
     // Check for rotation handle first
     if (selectedCrop) {
@@ -833,16 +862,28 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     // Check for crop selection
     const cropAtPos = getCropAt(pos.x, pos.y);
     if (cropAtPos) {
-      // Handle double-click detection
+      // Handle double-click/tap detection
       const currentTime = Date.now();
-      if (lastClickedCrop === cropAtPos.id && currentTime - lastClickTime < 300) {
-        // Double-click detected
-        onCropDoubleClick(cropAtPos.id);
-        return;
-      }
       
-      setLastClickTime(currentTime);
-      setLastClickedCrop(cropAtPos.id);
+      if ('touches' in e) {
+        // Touch double-tap detection
+        if (lastTouchedCrop === cropAtPos.id && currentTime - lastTouchTime < 500) {
+          // Double-tap detected
+          onCropDoubleClick(cropAtPos.id);
+          return;
+        }
+        setLastTouchTime(currentTime);
+        setLastTouchedCrop(cropAtPos.id);
+      } else {
+        // Mouse double-click detection
+        if (lastClickedCrop === cropAtPos.id && currentTime - lastClickTime < 300) {
+          // Double-click detected
+          onCropDoubleClick(cropAtPos.id);
+          return;
+        }
+        setLastClickTime(currentTime);
+        setLastClickedCrop(cropAtPos.id);
+      }
       
       onCropSelect(cropAtPos.id);
       setIsDragging(true);
@@ -851,31 +892,36 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       // Start creating new crop or panning
       onCropSelect(null);
       setLastClickedCrop(null);
+      setLastTouchedCrop(null);
       
-      if (e.button === 0) { // Left mouse button
-        // Check if we're over the image area to decide between creating crop or panning
-        const imgWidth = originalImage ? originalImage.width * imageScale : 0;
-        const imgHeight = originalImage ? originalImage.height * imageScale : 0;
-        const isOverImage = pos.x >= imageOffset.x && pos.x <= imageOffset.x + imgWidth &&
-                           pos.y >= imageOffset.y && pos.y <= imageOffset.y + imgHeight;
-        
-        if (isOverImage) {
-          // Start creating new crop
-          setIsCreatingCrop(true);
-          setNewCropStart(pos);
-          setNewCropEnd(pos);
-        } else {
-          // Start panning
-          setIsPanning(true);
-          setPanStart(pos);
-          setLastPanOffset(imageOffset);
-        }
+      // Check if we're over the image area to decide between creating crop or panning
+      const imgWidth = originalImage ? originalImage.width * imageScale : 0;
+      const imgHeight = originalImage ? originalImage.height * imageScale : 0;
+      const isOverImage = pos.x >= imageOffset.x && pos.x <= imageOffset.x + imgWidth &&
+                         pos.y >= imageOffset.y && pos.y <= imageOffset.y + imgHeight;
+      
+      if (isOverImage) {
+        // Start creating new crop
+        setIsCreatingCrop(true);
+        setNewCropStart(pos);
+        setNewCropEnd(pos);
+      } else {
+        // Start panning
+        setIsPanning(true);
+        setPanStart(pos);
+        setLastPanOffset(imageOffset);
       }
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
+  // Unified move handler for both mouse and touch
+  const handleMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const pos = getEventPos(e);
+    
+    // Prevent default for touch to avoid scrolling
+    if ('touches' in e) {
+      e.preventDefault();
+    }
     
     if (rotating) {
       const crop = cropAreas.find(c => c.id === rotating.cropId);
@@ -898,8 +944,8 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       const currentRotation = crop.rotation || 0;
       let newRotation = currentRotation + angleDiff;
       
-      // Snap to 15-degree increments when holding Shift
-      if (e.shiftKey) {
+      // Snap to 15-degree increments when holding Shift (desktop only)
+      if ('shiftKey' in e && e.shiftKey) {
         newRotation = Math.round(newRotation / 15) * 15;
       }
       
@@ -1047,31 +1093,34 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
       });
     }
 
-    // Update cursor based on context
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
-      if (selectedCrop) {
-        if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
-          canvas.style.cursor = rotating ? 'grabbing' : 'grab';
-        } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
-          canvas.style.cursor = 'nw-resize';
+    // Update cursor based on context (desktop only)
+    if (!('touches' in e)) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const selectedCrop = cropAreas.find(crop => crop.id === selectedCropId);
+        if (selectedCrop) {
+          if (getRotationHandle(pos.x, pos.y, selectedCrop)) {
+            canvas.style.cursor = rotating ? 'grabbing' : 'grab';
+          } else if (getResizeHandle(pos.x, pos.y, selectedCrop)) {
+            canvas.style.cursor = 'nw-resize';
+          } else if (getCropAt(pos.x, pos.y)) {
+            canvas.style.cursor = 'move';
+          } else {
+            canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
+          }
         } else if (getCropAt(pos.x, pos.y)) {
           canvas.style.cursor = 'move';
+        } else if (isCreatingCrop) {
+          canvas.style.cursor = 'crosshair';
         } else {
-          canvas.style.cursor = isCreatingCrop ? 'crosshair' : (isPanning ? 'grabbing' : 'grab');
+          canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
         }
-      } else if (getCropAt(pos.x, pos.y)) {
-        canvas.style.cursor = 'move';
-      } else if (isCreatingCrop) {
-        canvas.style.cursor = 'crosshair';
-      } else {
-        canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
       }
     }
   };
 
-  const handleMouseUp = () => {
+  // Unified end handler for both mouse and touch
+  const handleEnd = () => {
     // Handle crop creation completion
     if (isCreatingCrop) {
       const x = Math.min(newCropStart.x, newCropEnd.x);
@@ -1119,6 +1168,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     setResizing(null);
     setRotating(null);
     setIsPanning(false);
+    setIsTouching(false);
     
     const canvas = canvasRef.current;
     if (canvas) {
@@ -1128,7 +1178,7 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.max(0.1, Math.min(5, imageScale * delta));
     
@@ -1150,11 +1200,15 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="w-full h-full"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className="w-full h-full touch-none"
+        onMouseDown={handleStart}
+        onMouseMove={handleMove}
+        onMouseUp={handleEnd}
+        onMouseLeave={handleEnd}
+        onTouchStart={handleStart}
+        onTouchMove={handleMove}
+        onTouchEnd={handleEnd}
+        onTouchCancel={handleEnd}
         onWheel={handleWheel}
         onContextMenu={handleContextMenu}
         style={{ cursor: 'grab' }}
@@ -1175,15 +1229,30 @@ export const ViewportAwareCropCanvas: React.FC<ViewportAwareCropCanvasProps> = (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-gray-800/90 rounded-lg p-8 text-center max-w-md">
             <h3 className="text-xl font-semibold text-white mb-3">Ready to Crop!</h3>
-            <p className="text-gray-300 mb-2">Click and drag on the image to create a crop area</p>
+            <p className="text-gray-300 mb-2">
+              {window.innerWidth < 1024 ? 'Tap and drag on the image to create a crop area' : 'Click and drag on the image to create a crop area'}
+            </p>
             <p className="text-sm text-gray-400">
-              • Drag on image to create crops<br/>
-              • Drag crops to move them<br/>
-              • Use rotation handle to rotate<br/>
-              • Scroll to zoom<br/>
-              • Drag empty space to pan<br/>
-              • Double-click crop for advanced editing<br/>
-              • Right-click crop for context menu
+              {window.innerWidth < 1024 ? (
+                <>
+                  • Tap and drag on image to create crops<br/>
+                  • Drag crops to move them<br/>
+                  • Use rotation handle to rotate<br/>
+                  • Pinch to zoom<br/>
+                  • Drag empty space to pan<br/>
+                  • Double-tap crop for advanced editing
+                </>
+              ) : (
+                <>
+                  • Drag on image to create crops<br/>
+                  • Drag crops to move them<br/>
+                  • Use rotation handle to rotate<br/>
+                  • Scroll to zoom<br/>
+                  • Drag empty space to pan<br/>
+                  • Double-click crop for advanced editing<br/>
+                  • Right-click crop for context menu
+                </>
+              )}
             </p>
           </div>
         </div>
