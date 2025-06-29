@@ -60,8 +60,31 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageSelect }) =
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-6 flex flex-col min-h-[calc(100vh-160px)]">
-      <div className="flex-1">
+    <div className="w-full max-w-2xl mx-auto p-6 flex flex-col min-h-[calc(100vh-160px)] relative">
+      {/* Bolt.new Logo - Top Right */}
+      <div className="absolute top-0 right-0 z-10">
+        <a
+          href="https://bolt.new"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block transition-all duration-300 hover:scale-105 hover:opacity-80 group"
+          title="Powered by Bolt.new"
+        >
+          <div className="relative">
+            <img
+              src="/white_circle_360x360.png"
+              alt="Powered by Bolt.new"
+              className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 xl:w-32 xl:h-32 
+                         transition-all duration-300 group-hover:drop-shadow-lg"
+            />
+            {/* Subtle glow effect on hover */}
+            <div className="absolute inset-0 rounded-full bg-white/10 opacity-0 group-hover:opacity-100 
+                            transition-opacity duration-300 blur-sm"></div>
+          </div>
+        </a>
+      </div>
+
+      <div className="flex-1 mt-8 sm:mt-12 md:mt-16">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-white mb-4">Upload Your Image</h2>
           <p className="text-gray-400 text-lg">
