@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Live Demo
-[🔗 Visit Live App](#) *(Insert your deployment link here)*
+[🔗 Visit Live App](#https://elegant-biscotti-cd1425.netlify.app/) 
 
 ---
 
@@ -155,7 +155,7 @@
 
 - **Frontend:** React + TypeScript
 - **Rendering:** HTML5 Canvas API
-- **Styling:** Tailwind CSS / CSS Modules *(based on your actual setup)*
+- **Styling:** Tailwind CSS / CSS Modules
 - **State Management:** React Hooks
 
 ---
