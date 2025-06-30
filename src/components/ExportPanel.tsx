@@ -36,53 +36,71 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         return;
       }
 
-      // Set canvas size to crop dimensions
-      canvas.width = crop.width;
-      canvas.height = crop.height;
+      // Get device pixel ratio for high-DPI displays (especially mobile)
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      
+      // For mobile devices, we need to be more precise with coordinate calculations
+      const isMobile = window.innerWidth < 768;
+      
+      // The crop coordinates are already in image space, so we can use them directly
+      // No need to convert from canvas coordinates since crops are stored in image coordinates
+      let cropX = crop.x;
+      let cropY = crop.y;
+      let cropWidth = crop.width;
+      let cropHeight = crop.height;
+
+      // Ensure crop coordinates are within image bounds
+      cropX = Math.max(0, Math.min(cropX, originalImage.width));
+      cropY = Math.max(0, Math.min(cropY, originalImage.height));
+      cropWidth = Math.max(1, Math.min(cropWidth, originalImage.width - cropX));
+      cropHeight = Math.max(1, Math.min(cropHeight, originalImage.height - cropY));
+
+      // Set canvas size to the exact crop dimensions
+      // For mobile, we might want to scale up for better quality
+      const outputScale = isMobile ? Math.min(2, devicePixelRatio) : 1;
+      canvas.width = cropWidth * outputScale;
+      canvas.height = cropHeight * outputScale;
+
+      // Scale the context for high-DPI output
+      if (outputScale !== 1) {
+        ctx.scale(outputScale, outputScale);
+      }
 
       // Fill with white background for transparent areas
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Calculate the actual crop coordinates relative to the original image
-      // Convert canvas coordinates back to image coordinates
-      const imageX = (crop.x - imageOffset.x) / imageScale;
-      const imageY = (crop.y - imageOffset.y) / imageScale;
-      const imageWidth = crop.width / imageScale;
-      const imageHeight = crop.height / imageScale;
+      ctx.fillRect(0, 0, cropWidth, cropHeight);
 
       // Apply rotation if present
       const rotation = crop.rotation || 0;
       if (rotation !== 0) {
         // Move to center of canvas for rotation
-        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.translate(cropWidth / 2, cropHeight / 2);
         ctx.rotate((rotation * Math.PI) / 180);
-        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+        ctx.translate(-cropWidth / 2, -cropHeight / 2);
       }
 
-      // Ensure crop is within image bounds
-      const cropX = Math.max(0, Math.min(imageX, originalImage.width));
-      const cropY = Math.max(0, Math.min(imageY, originalImage.height));
-      const cropWidth = Math.max(1, Math.min(imageWidth, originalImage.width - cropX));
-      const cropHeight = Math.max(1, Math.min(imageHeight, originalImage.height - cropY));
-
       // Draw the cropped portion of the image
+      // Use the exact crop coordinates from image space
       ctx.drawImage(
         originalImage,
-        cropX,
-        cropY,
-        cropWidth,
-        cropHeight,
-        0,
-        0,
-        crop.width,
-        crop.height
+        cropX,           // Source X in original image
+        cropY,           // Source Y in original image  
+        cropWidth,       // Source width in original image
+        cropHeight,      // Source height in original image
+        0,               // Destination X in canvas
+        0,               // Destination Y in canvas
+        cropWidth,       // Destination width in canvas
+        cropHeight       // Destination height in canvas
       );
 
       const mimeType = exportFormat === 'jpeg' ? 'image/jpeg' : 
                       exportFormat === 'webp' ? 'image/webp' : 'image/png';
       
-      const dataUrl = canvas.toDataURL(mimeType, exportQuality);
+      // For mobile, ensure we get the best quality
+      const quality = exportFormat === 'png' ? undefined : 
+                     isMobile ? Math.max(0.9, exportQuality) : exportQuality;
+      
+      const dataUrl = canvas.toDataURL(mimeType, quality);
       resolve(dataUrl);
     });
   };
@@ -91,6 +109,16 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
     const link = document.createElement('a');
     link.download = filename;
     link.href = dataUrl;
+    
+    // For mobile browsers, we need to handle download differently
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // For mobile, open in new tab/window so user can save manually if needed
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+    }
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -107,8 +135,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         if (dataUrl) {
           const filename = `${crop.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${exportFormat}`;
           downloadImage(dataUrl, filename);
-          // Add a small delay between downloads
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Add a longer delay for mobile to handle downloads properly
+          const delay = window.innerWidth < 768 ? 500 : 200;
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     } catch (error) {
@@ -128,8 +157,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         if (dataUrl) {
           const filename = `${crop.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${exportFormat}`;
           downloadImage(dataUrl, filename);
-          // Add a small delay between downloads
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Add a longer delay for mobile to handle downloads properly
+          const delay = window.innerWidth < 768 ? 500 : 200;
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     } catch (error) {
@@ -197,10 +227,13 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
               <div>
                 <label className="block text-xs text-gray-400 mb-2">
                   Quality: {Math.round(exportQuality * 100)}%
+                  {window.innerWidth < 768 && (
+                    <span className="ml-2 text-blue-400">(Mobile: Min 90%)</span>
+                  )}
                 </label>
                 <input
                   type="range"
-                  min="0.1"
+                  min={window.innerWidth < 768 ? "0.9" : "0.1"}
                   max="1"
                   step="0.1"
                   value={exportQuality}
@@ -211,6 +244,15 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
             )}
           </div>
         </div>
+
+        {/* Mobile-specific notice */}
+        {window.innerWidth < 768 && (
+          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3">
+            <p className="text-xs text-blue-300">
+              <strong>Mobile Note:</strong> Downloads are optimized for mobile devices with enhanced quality and proper coordinate handling.
+            </p>
+          </div>
+        )}
 
         {/* Crop Selection */}
         {cropAreas.length > 0 && (
