@@ -1,10 +1,7 @@
-# 📸 ImageCrop Pro - Professional Multi-Crop Image Editor
+# ImageCrop Pro - Professional Multi-Crop Image Editor
 
 **ImageCrop Pro** is a powerful, browser-based image cropping tool built for photographers, designers, and content creators who need **multi-crop precision**, advanced controls, and responsive performance. Developed in **React** and **TypeScript**, it offers professional features in an intuitive and modern interface.
 
----
-
-## 🚀 Live Demo
 🔗 [Visit Live App](https://elegant-biscotti-cd1425.netlify.app/) 
 
 ---
@@ -110,33 +107,6 @@
 - Handles high-resolution images efficiently
 - Real-time interaction at 60 FPS
 - Fast, high-quality exports
-
----
-
-## 📚 Use Cases
-
-### 📸 Photography
-- Create multiple versions from a single shot
-- Crop for social media formats (square, story, etc.)
-
-### 🎨 Design
-- Generate platform-specific assets
-- Export elements for responsive designs
-
-### 📱 Content Creation
-- Make thumbnails, profile images, banners
-- Prepare content for different screen sizes
-
-### 🏢 Professional Workflows
-- Batch product image cropping
-- Standardize crop sizes for automation
-
----
-
-## 🌐 Browser Compatibility
-- Chrome, Firefox, Safari, Edge (latest)
-- iOS and Android mobile browsers
-- Progressive enhancement for older browsers
 
 ---
 
